@@ -1,2 +1,0 @@
-INSERT INTO `script_texts` VALUES ('-1999830', 'The Mailbox', null, null, 'Ein Briefkasten', null, null, null, null, null, '0', '0', '0', '0', 'guard GOSSIP_TEXT_MAILBOX');
-INSERT INTO `script_texts` VALUES ('-1999831', 'I'd like to browse your goods.', null, null, 'Ich sehe mich hier nur mal um', null, null, null, null, null, '0', '0', '0', '0', 'guard GOSSIP_TEXT_BROWSE_GOODS');
