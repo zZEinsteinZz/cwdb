@@ -4,7 +4,6 @@
 	Version="9,00"
 	Name="game"
 	ProjectGUID="{1DC6C4DA-A028-41F3-877D-D5400C594F88}"
-	RootNamespace="game"
 	TargetFrameworkVersion="131072"
 	>
 	<Platforms>
@@ -177,23 +176,11 @@
 			Name="World/Handlers"
 			>
 			<File
-				RelativePath="..\..\src\game\AccountMgr.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\AccountMgr.h"
-				>
-			</File>
-			<File
 				RelativePath="..\..\src\game\AddonHandler.cpp"
 				>
 			</File>
 			<File
 				RelativePath="..\..\src\game\AddonHandler.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\ArenaTeamHandler.cpp"
 				>
 			</File>
 			<File
@@ -209,30 +196,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\game\BattleGroundAB.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\BattleGroundAB.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\BattleGroundAV.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\BattleGroundAV.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\BattleGroundEY.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\BattleGroundEY.h"
-				>
-			</File>
-			<File
 				RelativePath="..\..\src\game\BattleGroundHandler.cpp"
 				>
 			</File>
@@ -242,14 +205,6 @@
 			</File>
 			<File
 				RelativePath="..\..\src\game\BattleGroundMgr.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\BattleGroundWS.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\BattleGroundWS.h"
 				>
 			</File>
 			<File
@@ -353,10 +308,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\game\LFGHandler.cpp"
-				>
-			</File>
-			<File
 				RelativePath="..\..\src\game\LootHandler.cpp"
 				>
 			</File>
@@ -422,10 +373,6 @@
 			</File>
 			<File
 				RelativePath="..\..\src\game\PetHandler.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\PetitionsHandler.cpp"
 				>
 			</File>
 			<File
@@ -541,14 +488,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\game\ArenaTeam.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\ArenaTeam.h"
-				>
-			</File>
-			<File
 				RelativePath="..\..\src\game\AuctionHouseObject.h"
 				>
 			</File>
@@ -641,18 +580,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\game\FollowerReference.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\FollowerReference.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\FollowerRefManager.h"
-				>
-			</File>
-			<File
 				RelativePath="..\..\src\game\Formulas.h"
 				>
 			</File>
@@ -709,19 +636,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\game\ItemEnchantmentMgr.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\ItemEnchantmentMgr.h"
-				>
-			</File>
-			<File
 				RelativePath="..\..\src\game\ItemPrototype.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\LinkedList.h"
 				>
 			</File>
 			<File
@@ -830,14 +745,6 @@
 			</File>
 			<File
 				RelativePath="..\..\src\game\RedZoneDistrict.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\Reference.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\game\RefManager.h"
 				>
 			</File>
 			<File

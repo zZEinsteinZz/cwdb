@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright (C) 2005,2006,2007 MaNGOS <http://www.mangosproject.org/>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -26,11 +26,6 @@
 #include "Common.h"
 #include "Auth/BigNumber.h"
 #include "Network/TcpSocket.h"
-#include "Network/SocketHandler.h"
-#include "Network/ListenSocket.h"
-#include "Network/Utility.h"
-#include "Network/Parse.h"
-#include "Network/Socket.h"
 
 /// Handle login commands
 class AuthSocket: public TcpSocket
@@ -38,7 +33,7 @@ class AuthSocket: public TcpSocket
     public:
         const static int s_BYTE_SIZE = 32;
 
-        AuthSocket(ISocketHandler& h);
+        AuthSocket(SocketHandler& h);
         ~AuthSocket();
 
         void OnAccept();
@@ -53,7 +48,7 @@ class AuthSocket: public TcpSocket
         bool _HandleXferCancel();
         bool _HandleXferAccept();
 
-        void _SetVSFields(std::string rI);
+        void _SetVSFields(std::string password);
 
         FILE *pPatch;
         bool IsLag();

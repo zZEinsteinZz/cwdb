@@ -24,25 +24,25 @@
 #define __NAMETABLES_H
 
 #include "Common.h"
-#include "Opcodes.h"
+
+struct NameTableEntry
+{
+    uint32 id;
+    const char *name;
+};
 
 /// Lookup opcode name for human understandable logging
-inline const char* LookupName(uint32 id, const char* table[])
+inline const char* LookupName(uint32 id, NameTableEntry *table)
 {
-    /* slow code
     for(uint32 i = 0; table[i].name != 0; i++)
     {
         if (table[i].id == id)
             return table[i].name;
     }
 
-    return "UNKNOWN";*/
-    //fast code
-    if (id > MAX_OPCODE_ID) 
-        return "UNKNOWN OPCODE_CODE received, it is more than max!";
-    return table[id];
+    return "UNKNOWN";
 }
 
-extern const char* g_worldOpcodeNames[];
+extern NameTableEntry g_worldOpcodeNames[];
 #endif
 /// @}

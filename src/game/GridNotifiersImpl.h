@@ -27,149 +27,204 @@
 #include "CreatureAI.h"
 #include "SpellAuras.h"
 
-template<class T>
+template<>
 inline void
-MaNGOS::VisibleNotifier::Visit(std::map<OBJECT_HANDLE, T *> &m)
+MaNGOS::NotVisibleNotifier::Visit(std::map<OBJECT_HANDLE, Creature *> &m)
 {
-    for(typename std::map<OBJECT_HANDLE, T *>::iterator iter=m.begin(); iter != m.end(); ++iter)
+    for(std::map<OBJECT_HANDLE, Creature *>::iterator iter=m.begin(); iter != m.end(); ++iter)
+        if( ( i_player.isAlive() && iter->second->isAlive()) ||
+        (i_player.isDead() && iter->second->isDead()) )
+            iter->second->BuildOutOfRangeUpdateBlock(&i_data);
+}
+
+template<>
+inline void
+MaNGOS::VisibleNotifier::Visit(std::map<OBJECT_HANDLE, Creature *> &m)
+{
+    for(std::map<OBJECT_HANDLE, Creature *>::iterator iter=m.begin(); iter != m.end(); ++iter)
     {
-        i_player.UpdateVisibilityOf(iter->second,i_data,i_data_updates);
-        i_clientGUIDs.erase(iter->second->GetGUID());
+        if( iter->second->IsVisibleInGridForPlayer(&i_player) )
+        {
+            iter->second->BuildUpdate(i_updateDatas);
+            iter->second->BuildCreateUpdateBlockForPlayer(&i_data, &i_player);
+        }
+        else
+        {
+            iter->second->DestroyForPlayer(&i_player);
+        }
     }
 }
 
-template<class T>
+template<>
 inline void
-MaNGOS::VisibleNotifier::Visit(std::map<OBJECT_HANDLE, CountedPtr<T> > &m)
+MaNGOS::VisibleNotifier::Visit(std::map<OBJECT_HANDLE, Player *> &m)
 {
-    for(typename std::map<OBJECT_HANDLE, CountedPtr<T> >::iterator iter=m.begin(); iter != m.end(); ++iter)
+    for(std::map<OBJECT_HANDLE, Player *>::iterator iter=m.begin(); iter != m.end(); ++iter)
     {
-        i_player.UpdateVisibilityOf(&*iter->second,i_data,i_data_updates);
-        i_clientGUIDs.erase(iter->second->GetGUID());
+        if( iter->second == &i_player )
+            continue;
+
+        if( (i_player.isAlive() && iter->second->isAlive()) ||
+            (i_player.isDead() && iter->second->isDead()) )
+        {
+            if (iter->second->isVisibleFor(&i_player,false))
+                iter->second->SendUpdateToPlayer(&i_player);
+            if (i_player.isVisibleFor(iter->second,false))
+                i_player.SendUpdateToPlayer(iter->second);
+        }
+        else
+        {
+            i_player.DestroyForPlayer(iter->second);
+            iter->second->DestroyForPlayer(&i_player);
+        }
     }
 }
 
 inline void
-MaNGOS::ObjectUpdater::Visit(CreatureMapType &m)
+MaNGOS::ObjectUpdater::Visit(std::map<OBJECT_HANDLE, Creature *> &m)
 {
-    for(CreatureMapType::iterator iter=m.begin(); iter != m.end(); ++iter)
-        if(!iter->second->isSpiritService())
+    for(std::map<OBJECT_HANDLE, Creature*>::iterator iter=m.begin(); iter != m.end(); ++iter)
+        if(!iter->second->isSpiritHealer())
             iter->second->Update(i_timeDiff);
 }
 
+template<>
 inline void
-MaNGOS::PlayerRelocationNotifier::Visit(PlayerMapType &m)
+MaNGOS::PlayerRelocationNotifier::Visit(std::map<OBJECT_HANDLE, Player *> &m)
 {
-    for(PlayerMapType::iterator iter=m.begin(); iter != m.end(); ++iter)
-    {
-        if(&i_player==iter->second)
-            continue;
+    if(!i_player.isAlive() || i_player.isInFlight())
+        return;
 
-        // visibility for players updated by ObjectAccessor::UpdateVisibilityFor calls in appropriate places
+    for(std::map<OBJECT_HANDLE, Player *>::iterator iter=m.begin(); iter != m.end(); ++iter)
+    {
+        // Remove selection
+        if(i_player.GetSelection()==iter->second->GetGUID())
+                                                            // visibility distance
+            if(!i_player.IsWithinDistInMap(iter->second, 160))
+                                                            // valor under 160 can generate a bug of visibility, as a player
+                i_player.SendOutOfRange(iter->second);      // can reach 158 yards until it disapears, without been selected
+
+        if(iter->second->GetSelection()==i_player.GetGUID())
+                                                            // visibility distance
+            if(!i_player.IsWithinDistInMap(iter->second, 160))
+                iter->second->SendOutOfRange(&i_player);
 
         // Cancel Trade
         if(i_player.GetTrader()==iter->second)
             if(!i_player.IsWithinDistInMap(iter->second, 5))     // iteraction distance
                 i_player.GetSession()->SendCancelTrade();   // will clode both side trade windows
+
     }
 }
 
 inline void PlayerCreatureRelocationWorker(Player* pl, Creature* c)
 {
-    // update creature visibility at player/creature move
-    pl->UpdateVisibilityOf(c);
+    // Remove selection
+    if(pl->GetSelection()==c->GetGUID())
+        if(!pl->IsWithinDistInMap(c, 160))                       // visibility distance
+            pl->SendOutOfRange(c);
 
     // Creature AI reaction
-    if( c->AI() && c->AI()->IsVisible(pl) )
-        c->AI()->MoveInLineOfSight(pl);
+    if( c->AI().IsVisible(pl) )
+        c->AI().MoveInLineOfSight(pl);
 }
 
 inline void CreatureCreatureRelocationWorker(Creature* c1, Creature* c2)
 {
-    if( c1->AI() && c1->AI()->IsVisible(c2) )
-        c1->AI()->MoveInLineOfSight(c2);
+    if( c1->AI().IsVisible(c2) )
+        c1->AI().MoveInLineOfSight(c2);
 
-    if( c2->AI() && c2->AI()->IsVisible(c1) )
-        c2->AI()->MoveInLineOfSight(c1);
+    if( c2->AI().IsVisible(c1) )
+        c2->AI().MoveInLineOfSight(c1);
 }
 
+template<>
 inline void
-MaNGOS::PlayerRelocationNotifier::Visit(CreatureMapType &m)
+MaNGOS::PlayerRelocationNotifier::Visit(std::map<OBJECT_HANDLE, Corpse *> &m)
+{
+    for(std::map<OBJECT_HANDLE, Corpse *>::iterator iter=m.begin(); iter != m.end(); ++iter)
+        if( !i_player.isAlive() && iter->second->GetType()==CORPSE_RESURRECTABLE )
+            iter->second->UpdateForPlayer(&i_player,false);
+}
+
+template<>
+inline void
+MaNGOS::PlayerRelocationNotifier::Visit(std::map<OBJECT_HANDLE, Creature *> &m)
 {
     if(!i_player.isAlive() || i_player.isInFlight())
         return;
 
-    for(CreatureMapType::iterator iter=m.begin(); iter != m.end(); ++iter)
-        if( iter->second->isAlive())
+    for(std::map<OBJECT_HANDLE, Creature *>::iterator iter=m.begin(); iter != m.end(); ++iter)
+        if( iter->second->isAlive() && !iter->second->isInFlight())
             PlayerCreatureRelocationWorker(&i_player,iter->second);
 }
 
 template<>
 inline void
-MaNGOS::CreatureRelocationNotifier::Visit(PlayerMapType &m)
+MaNGOS::CreatureRelocationNotifier::Visit(std::map<OBJECT_HANDLE, Player *> &m)
 {
-    if(!i_creature.isAlive())
+    if(!i_creature.isAlive() || i_creature.isInFlight())
         return;
 
-    for(PlayerMapType::iterator iter=m.begin(); iter != m.end(); ++iter)
+    for(std::map<OBJECT_HANDLE, Player *>::iterator iter=m.begin(); iter != m.end(); ++iter)
         if( iter->second->isAlive() && !iter->second->isInFlight())
             PlayerCreatureRelocationWorker(iter->second, &i_creature);
 }
 
 template<>
 inline void
-MaNGOS::CreatureRelocationNotifier::Visit(CreatureMapType &m)
+MaNGOS::CreatureRelocationNotifier::Visit(std::map<OBJECT_HANDLE, Creature *> &m)
 {
-    if(!i_creature.isAlive())
+    if(!i_creature.isAlive() || i_creature.isInFlight())
         return;
 
-    for(CreatureMapType::iterator iter=m.begin(); iter != m.end(); ++iter)
-        if( iter->second->isAlive())
+    for(std::map<OBJECT_HANDLE, Creature *>::iterator iter=m.begin(); iter != m.end(); ++iter)
+        if( iter->second->isAlive() && !iter->second->isInFlight())
             CreatureCreatureRelocationWorker(iter->second, &i_creature);
 }
 
-inline void MaNGOS::DynamicObjectUpdater::VisitHelper(Unit* target)
+template<>
+inline void
+MaNGOS::DynamicObjectUpdater::Visit(std::map<OBJECT_HANDLE, Creature *>  &m)
 {
-    if(!target->isAlive() || target->isInFlight() )
-        return;
-
-    if (!i_dynobject.IsWithinDistInMap(target, i_dynobject.GetRadius()))
-        return;
-
-    if( i_check->GetTypeId()==TYPEID_PLAYER )
+    for(std::map<OBJECT_HANDLE, Creature*>::iterator itr=m.begin(); itr != m.end(); ++itr)
     {
-        if (i_check->IsFriendlyTo( target ))
-            return;
-    }
-    else
-    {
-        if (!i_check->IsHostileTo( target ))
-            return;
-    }
+        if(itr->second->isAlive() && !itr->second->isInFlight() )
+        {
+            if (owner.GetCaster()->IsFriendlyTo(itr->second) || !owner.IsWithinDistInMap(itr->second, owner.GetRadius()))
+                continue;
 
-    if (i_dynobject.IsAffecting(target))
-        return;
-
-    SpellEntry const *spellInfo = sSpellStore.LookupEntry(i_dynobject.GetSpellId());
-    PersistentAreaAura* Aur = new PersistentAreaAura(spellInfo, i_dynobject.GetEffIndex(), target, i_dynobject.GetCaster());
-    target->AddAura(Aur);
-    i_dynobject.AddAffected(target);
+            if (!owner.IsAffecting(itr->second))
+            {
+                SpellEntry const *spellInfo = sSpellStore.LookupEntry(owner.GetSpellId());
+                PersistentAreaAura* Aur = new PersistentAreaAura(spellInfo, owner.GetEffIndex(), itr->second, owner.GetCaster());
+                itr->second->AddAura(Aur);
+                owner.AddAffected(itr->second);
+            }
+        }
+    }
 }
 
 template<>
 inline void
-MaNGOS::DynamicObjectUpdater::Visit(CreatureMapType  &m)
+MaNGOS::DynamicObjectUpdater::Visit(std::map<OBJECT_HANDLE, Player *>  &m)
 {
-    for(CreatureMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
-        VisitHelper(itr->second);
-}
+    for(std::map<OBJECT_HANDLE, Player*>::iterator itr=m.begin(); itr != m.end(); ++itr)
+    {
+        if(itr->second->isAlive() && !itr->second->isInFlight() )
+        {
+            if (owner.GetCaster()->IsFriendlyTo(itr->second) || !owner.IsWithinDistInMap(itr->second,owner.GetRadius()))
+                continue;
 
-template<>
-inline void
-MaNGOS::DynamicObjectUpdater::Visit(PlayerMapType  &m)
-{
-    for(PlayerMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
-        VisitHelper(itr->second);
+            if (!owner.IsAffecting(itr->second))
+            {
+                SpellEntry const *spellInfo = sSpellStore.LookupEntry(owner.GetSpellId());
+                PersistentAreaAura* Aur = new PersistentAreaAura(spellInfo, owner.GetEffIndex(), itr->second, owner.GetCaster());
+                itr->second->AddAura(Aur);
+                owner.AddAffected(itr->second);
+            }
+        }
+    }
 }
 
 // SEARCHERS & LIST SEARCHERS & WORKERS
@@ -177,12 +232,12 @@ MaNGOS::DynamicObjectUpdater::Visit(PlayerMapType  &m)
 // WorldObject searchers & workers
 
 template<class Check>
-void MaNGOS::WorldObjectSearcher<Check>::Visit(GameObjectMapType &m)
+void MaNGOS::WorldObjectSearcher<Check>::Visit(std::map<OBJECT_HANDLE, GameObject *> &m)
 {
     // already found
     if(i_object) return;
 
-    for(GameObjectMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, GameObject *>::iterator itr=m.begin(); itr != m.end(); ++itr)
     {
         if(i_check(itr->second))
         {
@@ -193,12 +248,12 @@ void MaNGOS::WorldObjectSearcher<Check>::Visit(GameObjectMapType &m)
 }
 
 template<class Check>
-void MaNGOS::WorldObjectSearcher<Check>::Visit(PlayerMapType &m)
+void MaNGOS::WorldObjectSearcher<Check>::Visit(std::map<OBJECT_HANDLE, Player*> &m)
 {
     // already found
     if(i_object) return;
 
-    for(PlayerMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, Player *>::iterator itr=m.begin(); itr != m.end(); ++itr)
     {
         if(i_check(itr->second))
         {
@@ -209,12 +264,12 @@ void MaNGOS::WorldObjectSearcher<Check>::Visit(PlayerMapType &m)
 }
 
 template<class Check>
-void MaNGOS::WorldObjectSearcher<Check>::Visit(CreatureMapType &m)
+void MaNGOS::WorldObjectSearcher<Check>::Visit(std::map<OBJECT_HANDLE, Creature*> &m)
 {
     // already found
     if(i_object) return;
 
-    for(CreatureMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, Creature*>::iterator itr=m.begin(); itr != m.end(); ++itr)
     {
         if(i_check(itr->second))
         {
@@ -225,28 +280,12 @@ void MaNGOS::WorldObjectSearcher<Check>::Visit(CreatureMapType &m)
 }
 
 template<class Check>
-void MaNGOS::WorldObjectSearcher<Check>::Visit(CorpseMapType &m)
-{
-    // already found
-    if(i_objectptr) return;
-
-    for(CorpseMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
-    {
-        if(i_check(itr->second))
-        {
-            i_objectptr = itr->second;
-            return;
-        }
-    }
-}
-
-template<class Check>
-void MaNGOS::WorldObjectSearcher<Check>::Visit(DynamicObjectMapType &m)
+void MaNGOS::WorldObjectSearcher<Check>::Visit(std::map<OBJECT_HANDLE, Corpse*> &m)
 {
     // already found
     if(i_object) return;
 
-    for(DynamicObjectMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, Corpse *>::iterator itr=m.begin(); itr != m.end(); ++itr)
     {
         if(i_check(itr->second))
         {
@@ -257,41 +296,57 @@ void MaNGOS::WorldObjectSearcher<Check>::Visit(DynamicObjectMapType &m)
 }
 
 template<class Check>
-void MaNGOS::WorldObjectListSearcher<Check>::Visit(PlayerMapType &m)
+void MaNGOS::WorldObjectSearcher<Check>::Visit(std::map<OBJECT_HANDLE, DynamicObject*> &m)
 {
-    for(PlayerMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    // already found
+    if(i_object) return;
+
+    for(std::map<OBJECT_HANDLE, DynamicObject*>::iterator itr=m.begin(); itr != m.end(); ++itr)
+    {
+        if(i_check(itr->second))
+        {
+            i_object = itr->second;
+            return;
+        }
+    }
+}
+
+template<class Check>
+void MaNGOS::WorldObjectListSearcher<Check>::Visit(std::map<OBJECT_HANDLE, Player *> &m)
+{
+    for(std::map<OBJECT_HANDLE, Player *>::iterator itr=m.begin(); itr != m.end(); ++itr)
         if(i_check(itr->second))
             i_objects.push_back(itr->second);
 }
 
 template<class Check>
-void MaNGOS::WorldObjectListSearcher<Check>::Visit(CreatureMapType &m)
+void MaNGOS::WorldObjectListSearcher<Check>::Visit(std::map<OBJECT_HANDLE, Creature *> &m)
 {
-    for(CreatureMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, Creature *>::iterator itr=m.begin(); itr != m.end(); ++itr)
         if(i_check(itr->second))
             i_objects.push_back(itr->second);
 }
 
 template<class Check>
-void MaNGOS::WorldObjectListSearcher<Check>::Visit(CorpseMapType &m)
+void MaNGOS::WorldObjectListSearcher<Check>::Visit(std::map<OBJECT_HANDLE, Corpse *> &m)
 {
-    for(CorpseMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
-        if(i_check(itr->second))
-            i_objects.push_back(&*itr->second);
-}
-
-template<class Check>
-void MaNGOS::WorldObjectListSearcher<Check>::Visit(GameObjectMapType &m)
-{
-    for(GameObjectMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, Corpse *>::iterator itr=m.begin(); itr != m.end(); ++itr)
         if(i_check(itr->second))
             i_objects.push_back(itr->second);
 }
 
 template<class Check>
-void MaNGOS::WorldObjectListSearcher<Check>::Visit(DynamicObjectMapType &m)
+void MaNGOS::WorldObjectListSearcher<Check>::Visit(std::map<OBJECT_HANDLE, GameObject *> &m)
 {
-    for(DynamicObjectMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, GameObject *>::iterator itr=m.begin(); itr != m.end(); ++itr)
+        if(i_check(itr->second))
+            i_objects.push_back(itr->second);
+}
+
+template<class Check>
+void MaNGOS::WorldObjectListSearcher<Check>::Visit(std::map<OBJECT_HANDLE, DynamicObject *> &m)
+{
+    for(std::map<OBJECT_HANDLE, DynamicObject *>::iterator itr=m.begin(); itr != m.end(); ++itr)
         if(i_check(itr->second))
             i_objects.push_back(itr->second);
 }
@@ -299,12 +354,12 @@ void MaNGOS::WorldObjectListSearcher<Check>::Visit(DynamicObjectMapType &m)
 // Gameobject searchers
 
 template<class Check>
-void MaNGOS::GameObjectSearcher<Check>::Visit(GameObjectMapType &m)
+void MaNGOS::GameObjectSearcher<Check>::Visit(std::map<OBJECT_HANDLE, GameObject *> &m)
 {
     // already found
     if(i_object) return;
 
-    for(GameObjectMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, GameObject *>::iterator itr=m.begin(); itr != m.end(); ++itr)
     {
         if(i_check(itr->second))
         {
@@ -315,9 +370,9 @@ void MaNGOS::GameObjectSearcher<Check>::Visit(GameObjectMapType &m)
 }
 
 template<class Check>
-void MaNGOS::GameObjectListSearcher<Check>::Visit(GameObjectMapType &m)
+void MaNGOS::GameObjectListSearcher<Check>::Visit(std::map<OBJECT_HANDLE, GameObject *> &m)
 {
-    for(GameObjectMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, GameObject *>::iterator itr=m.begin(); itr != m.end(); ++itr)
         if(i_check(itr->second))
             i_objects.push_back(itr->second);
 }
@@ -325,12 +380,12 @@ void MaNGOS::GameObjectListSearcher<Check>::Visit(GameObjectMapType &m)
 // Unit searchers
 
 template<class Check>
-void MaNGOS::UnitSearcher<Check>::Visit(CreatureMapType &m)
+void MaNGOS::UnitSearcher<Check>::Visit(std::map<OBJECT_HANDLE, Creature *> &m)
 {
     // already found
     if(i_object) return;
 
-    for(CreatureMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, Creature *>::iterator itr=m.begin(); itr != m.end(); ++itr)
     {
         if(i_check(itr->second))
         {
@@ -341,12 +396,12 @@ void MaNGOS::UnitSearcher<Check>::Visit(CreatureMapType &m)
 }
 
 template<class Check>
-void MaNGOS::UnitSearcher<Check>::Visit(PlayerMapType &m)
+void MaNGOS::UnitSearcher<Check>::Visit(std::map<OBJECT_HANDLE, Player *> &m)
 {
     // already found
     if(i_object) return;
 
-    for(PlayerMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, Player *>::iterator itr=m.begin(); itr != m.end(); ++itr)
     {
         if(i_check(itr->second))
         {
@@ -357,17 +412,17 @@ void MaNGOS::UnitSearcher<Check>::Visit(PlayerMapType &m)
 }
 
 template<class Check>
-void MaNGOS::UnitListSearcher<Check>::Visit(PlayerMapType &m)
+void MaNGOS::UnitListSearcher<Check>::Visit(std::map<OBJECT_HANDLE, Player *> &m)
 {
-    for(PlayerMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, Player *>::iterator itr=m.begin(); itr != m.end(); ++itr)
         if(i_check(itr->second))
             i_objects.push_back(itr->second);
 }
 
 template<class Check>
-void MaNGOS::UnitListSearcher<Check>::Visit(CreatureMapType &m)
+void MaNGOS::UnitListSearcher<Check>::Visit(std::map<OBJECT_HANDLE, Creature *> &m)
 {
-    for(CreatureMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, Creature *>::iterator itr=m.begin(); itr != m.end(); ++itr)
         if(i_check(itr->second))
             i_objects.push_back(itr->second);
 }
@@ -375,12 +430,12 @@ void MaNGOS::UnitListSearcher<Check>::Visit(CreatureMapType &m)
 // Creature searchers
 
 template<class Check>
-void MaNGOS::CreatureSearcher<Check>::Visit(CreatureMapType &m)
+void MaNGOS::CreatureSearcher<Check>::Visit(std::map<OBJECT_HANDLE, Creature *> &m)
 {
     // already found
     if(i_object) return;
 
-    for(CreatureMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, Creature *>::iterator itr=m.begin(); itr != m.end(); ++itr)
     {
         if(i_check(itr->second))
         {
@@ -391,9 +446,9 @@ void MaNGOS::CreatureSearcher<Check>::Visit(CreatureMapType &m)
 }
 
 template<class Check>
-void MaNGOS::CreatureListSearcher<Check>::Visit(CreatureMapType &m)
+void MaNGOS::CreatureListSearcher<Check>::Visit(std::map<OBJECT_HANDLE, Creature *> &m)
 {
-    for(CreatureMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
+    for(std::map<OBJECT_HANDLE, Creature *>::iterator itr=m.begin(); itr != m.end(); ++itr)
         if(i_check(itr->second))
             i_objects.push_back(itr->second);
 }

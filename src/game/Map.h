@@ -30,8 +30,6 @@
 #include "Timer.h"
 #include "SharedDefines.h"
 
-#include <bitset>
-
 class Unit;
 class WorldPacket;
 
@@ -101,16 +99,8 @@ class MANGOS_DLL_DECL Map : public MaNGOS::ObjectLevelLockable<Map, ZThread::Mut
         template<class T> void Remove(T *, bool);
         template<class T> bool Find(T *) const;
 
-        template<class T> T* GetObjectNear(WorldObject const &obj, OBJECT_HANDLE hdl, T*);
-        template<class T> T* GetObjectNear(float x, float y, OBJECT_HANDLE hdl, T*);
-
-        template<class T> void Add(CountedPtr<T>&);
-
-        template<class T> void Remove(CountedPtr<T>&, bool);
-        template<class T> bool Find(CountedPtr<T>&) const;
-
-        template<class T> CountedPtr<T>& GetObjectNear(WorldObject const &obj, OBJECT_HANDLE hdl);
-        template<class T> CountedPtr<T>& GetObjectNear(float x, float y, OBJECT_HANDLE hdl);
+        template<class T> T* GetObjectNear(WorldObject const &obj, OBJECT_HANDLE hdl);
+        template<class T> T* GetObjectNear(float x, float y, OBJECT_HANDLE hdl);
 
         virtual void Update(const uint32&);
 
@@ -118,7 +108,7 @@ class MANGOS_DLL_DECL Map : public MaNGOS::ObjectLevelLockable<Map, ZThread::Mut
 
         void MessageBoardcast(WorldObject *, WorldPacket *);
 
-        void PlayerRelocation(Player *, float x, float y, float z, float angl);
+        void PlayerRelocation(Player *, float x, float y, float z, float angl, bool visibilityChanges = false);
 
         void CreatureRelocation(Creature *creature, float x, float y, float, float);
 
@@ -194,7 +184,7 @@ class MANGOS_DLL_DECL Map : public MaNGOS::ObjectLevelLockable<Map, ZThread::Mut
         uint32 GetPlayersCount() {return(i_Players.size()); }
         void Reset();
         bool CanEnter(Player* player);
-        const char* GetMapName() const;
+        const char* GetMapName() { return(i_mapEntry ? i_mapEntry->name : "UNNAMEDMAP\x0"); }
         bool Instanceable() { return(i_mapEntry && ((i_mapEntry->map_type == MAP_INSTANCE) || (i_mapEntry->map_type == MAP_RAID))); }
         bool IsRaid() { return(i_mapEntry && (i_mapEntry->map_type == MAP_RAID)); }
         virtual bool RemoveBones(uint64 guid, float x, float y);
@@ -202,30 +192,19 @@ class MANGOS_DLL_DECL Map : public MaNGOS::ObjectLevelLockable<Map, ZThread::Mut
 
         GridMap *GridMaps[MAX_NUMBER_OF_GRIDS][MAX_NUMBER_OF_GRIDS];
 
-        std::bitset<TOTAL_NUMBER_OF_CELLS_PER_MAP*TOTAL_NUMBER_OF_CELLS_PER_MAP> marked_cells;
-
-        void UpdateObjectVisibility(WorldObject* obj, Cell cell, CellPair cellpair);
-        void UpdatePlayerVisibility(Player* player, Cell cell, CellPair cellpair);
-        void UpdateObjectsVisibilityFor(Player* player, Cell cell, CellPair cellpair);
     private:
         void SetTimer(uint32 t) { i_gridExpiry = t < MIN_GRID_DELAY ? MIN_GRID_DELAY : t; }
         uint64 CalculateGridMask(const uint32 &y) const;
 
-        void SendInitSelf( Player * player );
-
-        void SendInitTransports( Player * player );
-        void SendRemoveTransports( Player * player );
-
-        void PlayerRelocationNotify(Player* player, Cell cell, CellPair cellpair);
-
         bool CreatureCellRelocation(Creature *creature, Cell new_cell);
-        void CreatureRelocationNotify(Creature *creature, Cell newcell, CellPair newval);
+        void CreatureRelocationNotifying(Creature *creature, Cell newcell, CellPair newval);
 
         void AddCreatureToMoveList(Creature *c, float x, float y, float z, float ang);
         CreatureMoveList i_creaturesToMove;
 
         bool loaded(const GridPair &) const;
         void EnsureGridLoadedForPlayer(const Cell&, Player*, bool add_player);
+        void NotifyPlayerVisibility(const Cell &, const CellPair &, Player *);
         uint64  EnsureGridCreated(const GridPair &);
 
         template<class T> void AddType(T *obj);
@@ -266,19 +245,7 @@ class MANGOS_DLL_DECL Map : public MaNGOS::ObjectLevelLockable<Map, ZThread::Mut
             void DeleteFromWorld(T*);
 
         template<class T>
-            T* FindInGrid(uint64 guid, NGridType *, Cell const&, T*) const;
-
-        template<class T>
-            void AddToGrid(CountedPtr<T>&, NGridType *, Cell const&);
-
-        template<class T>
-            void RemoveFromGrid(CountedPtr<T>&, NGridType *, Cell const&);
-
-        template<class T>
-            void DeleteFromWorld(CountedPtr<T>&);
-
-        template<class T>
-            CountedPtr<T>& FindInGrid(uint64 guid, NGridType *, Cell const&) const;
+            T* FindInGrid(uint64 guid, NGridType *, Cell const&) const;
 };
 
 inline

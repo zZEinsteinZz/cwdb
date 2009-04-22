@@ -26,9 +26,7 @@
 #include "Spell.h"
 #include "SpellAuras.h"
 #include "BattleGroundMgr.h"
-#include "BattleGroundWS.h"
 #include "MapManager.h"
-#include "ScriptCalls.h"
 
 void WorldSession::HandleUseItemOpcode(WorldPacket& recvPacket)
 {
@@ -74,7 +72,7 @@ void WorldSession::HandleUseItemOpcode(WorldPacket& recvPacket)
 
         uint8 trade_goods = proto->Class == ITEM_CLASS_TRADE_GOODS && proto->SubClass != ITEM_SUBCLASS_EXPLOSIVES;
         if (consumable || trade_goods ||
-            proto->Class == ITEM_CLASS_KEY || proto->Class == ITEM_CLASS_MISC)
+            proto->Class == ITEM_CLASS_KEY || proto->Class == ITEM_CLASS_JUNK)
         {
             pUser->SendEquipError(EQUIP_ERR_CANT_DO_IN_COMBAT,pItem,NULL);
             return;
@@ -91,44 +89,38 @@ void WorldSession::HandleUseItemOpcode(WorldPacket& recvPacket)
         }
     }
 
-    //Note: If script stop casting it must send appropriate data to client to prevent stuck item in gray state.
-    if(!Script->ItemUse(pUser,pItem))
+    SpellCastTargets targets;
+    targets.read(&recvPacket, pUser);
+
+    // use trigerred flag only for items with many spell casts and for not first cast
+    int count = 0;
+
+    for(int i = 0; i <5; ++i)
     {
-        // no script or script not procces request by self
+        if( proto->Spells[i].SpellTrigger != USE )
+            continue;
 
-        SpellCastTargets targets;
-        targets.read(&recvPacket, pUser);
+        uint32 spellId = proto->Spells[i].SpellId;
 
-        // use triggered flag only for items with many spell casts and for not first cast
-        int count = 0;
+        if(!spellId)
+            continue;
 
-        for(int i = 0; i <5; ++i)
+        SpellEntry const *spellInfo = sSpellStore.LookupEntry(spellId);
+        if(!spellInfo)
         {
-            if( proto->Spells[i].SpellTrigger != USE )
-                continue;
-
-            uint32 spellId = proto->Spells[i].SpellId;
-
-            if(!spellId)
-                continue;
-
-            SpellEntry const *spellInfo = sSpellStore.LookupEntry(spellId);
-            if(!spellInfo)
-            {
-                sLog.outError("Item (Entry: %u) in have wrong spell id %u, ignoring ",proto->ItemId, spellId);
-                continue;
-            }
-
-            Spell *spell = new Spell(pUser, spellInfo, (count > 0) , 0);
-            spell->m_CastItem = pItem;
-            spell->prepare(&targets);
-
-            // delete triggered spell
-            if(count > 0)
-                delete spell;
-
-            ++count;
+            sLog.outError("Item (Entry: %u) in have wrong spell id %u, ignoring ",proto->ItemId, spellId);
+            continue;
         }
+
+        Spell *spell = new Spell(pUser, spellInfo, (count > 0) , 0);
+        spell->m_CastItem = pItem;
+        spell->prepare(&targets);
+
+        // delete triggered spell
+        if(count > 0)
+            delete spell;
+
+        ++count;
     }
 }
 
@@ -179,7 +171,7 @@ void WorldSession::HandleOpenItemOpcode(WorldPacket& recvPacket)
         }
 
         // required picklocking
-        if(lockInfo->requiredlockskill || lockInfo->requiredminingskill)
+        if(lockInfo->requiredlockskill || lockInfo->requiredskill)
         {
             pUser->SendEquipError(EQUIP_ERR_ITEM_LOCKED, pItem, NULL );
             return;
@@ -236,9 +228,6 @@ void WorldSession::HandleGameObjectUseOpcode( WorldPacket & recv_data )
     // default spell target is player that use GO
     Unit* spellTarget = GetPlayer();
 
-    if (Script->GOHello(_player, obj))
-        return;
-
     uint32 t = obj->GetUInt32Value(GAMEOBJECT_TYPE_ID);
     switch(t)
     {
@@ -273,12 +262,9 @@ void WorldSession::HandleGameObjectUseOpcode( WorldPacket & recv_data )
             }
             break;
 
-        //big gun, its a spell/aura
+            //big gun, its a spell/aura
         case GAMEOBJECT_TYPE_GOOBER:                        //10
-            info = obj->GetGOInfo();
-            spellId = info ? info->sound10 : 0;
-            break;
-
+            //chest locked
         case GAMEOBJECT_TYPE_SPELLCASTER:                   //22
 
             obj->SetUInt32Value(GAMEOBJECT_FLAGS,2);
@@ -290,23 +276,10 @@ void WorldSession::HandleGameObjectUseOpcode( WorldPacket & recv_data )
                 if (spellId == 0)
                     spellId = info->sound3;
 
-                //guid=_player->GetGUID();
+                guid=_player->GetGUID();
+
             }
 
-            break;
-        case GAMEOBJECT_TYPE_CAMERA:                        //13
-            info = obj->GetGOInfo();
-            if(info)
-            {
-                uint32 cinematic_id = info->sound1;
-                if(cinematic_id)
-                {
-                    WorldPacket data(SMSG_TRIGGER_CINEMATIC, 4);
-                    data << cinematic_id;
-                    _player->GetSession()->SendPacket(&data);
-                }
-                return;
-            }
             break;
             //fishing bobber
         case GAMEOBJECT_TYPE_FISHINGNODE:                   //17
@@ -349,7 +322,7 @@ void WorldSession::HandleGameObjectUseOpcode( WorldPacket & recv_data )
                     }
                     break;
                 }
-                case GO_LOOTED:                             // nothing to do, will be deleted at next update
+                case GO_LOOTED:                             // nothing to do, wiil be deleted at next update
                     break;
                 default:
                 {
@@ -373,8 +346,6 @@ void WorldSession::HandleGameObjectUseOpcode( WorldPacket & recv_data )
         {
             Unit* caster = obj->GetOwner();
 
-            info = obj->GetGOInfo();
-
             if( !caster || caster->GetTypeId()!=TYPEID_PLAYER )
                 return;
 
@@ -384,10 +355,10 @@ void WorldSession::HandleGameObjectUseOpcode( WorldPacket & recv_data )
 
             obj->AddUse(GetPlayer());
 
-            // must 2 group members use GO, or only 1 when it is meeting stone summon
-            if(obj->GetUniqueUseCount() < (info->sound0 == 2 ? 1 : 2))
+            // must 2 group members use GO
+            if(obj->GetUniqueUseCount() < 2)
                 return;
-
+            
             // in case summoning ritual caster is GO creator
             spellCaster = caster;
 
@@ -412,7 +383,7 @@ void WorldSession::HandleGameObjectUseOpcode( WorldPacket & recv_data )
             spellTarget = targetPlayer;
 
             // prepare data for final summoning (before current spell finish to prevent access to deleted GO)
-            //info = obj->GetGOInfo();
+            info = obj->GetGOInfo();
             spellId = info->sound1;
 
             // finish spell
@@ -425,123 +396,49 @@ void WorldSession::HandleGameObjectUseOpcode( WorldPacket & recv_data )
             // go to end function to spell casting
             break;
         }
-        case GAMEOBJECT_TYPE_MEETINGSTONE:                  //23
-        {
+        case GAMEOBJECT_TYPE_FLAGSTAND:                     //24
+            //GB flag
             info = obj->GetGOInfo();
-
-            Player* targetPlayer = ObjectAccessor::Instance().FindPlayer(((Player*)spellCaster)->GetSelection());
-
-            // accept only use by player from same group for caster except caster itself
-            if(!targetPlayer || targetPlayer == GetPlayer() || !targetPlayer->IsInSameGroupWith(GetPlayer()))
-                return;
-
-            //required lvl checks!
-            uint8 level = _player->getLevel();
-            if (level < info->sound0 || level > info->sound1)
-                return;
-            level = targetPlayer->getLevel();
-            if (level < info->sound0 || level > info->sound1)
-                return;
-
-            spellId = 23598;
-
-            break;
-        }
-
-        case GAMEOBJECT_TYPE_FLAGSTAND:                     // 24
-            if(_player->InBattleGround() &&                 // in battleground
-                !_player->IsMounted() &&                    // not mounted
-                !_player->HasStealthAura() &&               // not stealthed
-                !_player->HasInvisibilityAura())            // not invisible
+            if(info)
             {
-                BattleGround *bg = sBattleGroundMgr.GetBattleGround(_player->GetBattleGroundId());
-                if(!bg)
-                    return;
-                // AB:
-                // 15001
-                // 15002
-                // 15003
-                // 15004
-                // 15005
-                // WSG:
-                // 179830 - Silverwing Flag
-                // 179831 - Warsong Flag
-                // EotS:
-                // 184141 - Netherstorm Flag
-                //BG flag click
-                info = obj->GetGOInfo();
-                if(info)
-                {
-                    switch(info->id)
-                    {
-                        case 179830:
-                            spellId = 23335;    // Silverwing Flag
-                            break;
-                        case 179831:
-                            spellId = 23333;    // Warsong Flag
-                            break;
-                        case 184141:
-                            spellId = 34976;    // Netherstorm Flag
-                            break;
-                    }
-                }
+                spellId = info->sound0;
+                guid=_player->GetGUID();
             }
             break;
-        case GAMEOBJECT_TYPE_FLAGDROP:                      // 26
-            if(_player->InBattleGround() &&                 // in battleground
-                !_player->IsMounted() &&                    // not mounted
-                !_player->HasStealthAura() &&               // not stealthed
-                !_player->HasInvisibilityAura())            // not invisible
+
+        case GAMEOBJECT_TYPE_FLAGDROP:                      //26
+            //GB flag dropped
+            info = obj->GetGOInfo();
+            if(info)
             {
-                BattleGround *bg = sBattleGroundMgr.GetBattleGround(_player->GetBattleGroundId());
-                if(!bg)
-                    return;
-                //BG flag dropped
-                // WSG:
-                // 179785 - Silverwing Flag
-                // 179786 - Warsong Flag
-                // EotS:
-                // 184142 - Netherstorm Flag
-                info = obj->GetGOInfo();
-                if(info)
+                spellId = info->sound0;
+                guid=_player->GetGUID();
+            }
+            break;
+        case GAMEOBJECT_TYPE_CUSTOM_TELEPORTER:
+            info = obj->GetGOInfo();
+            if(info)
+            {
+                AreaTrigger *fields = objmgr.GetAreaTrigger( info->sound0 );
+                if(fields)
                 {
-                    switch(info->id)
-                    {
-                        case 179785:                        // Silverwing Flag
-                            if(_player->GetTeam() == ALLIANCE)
-                            {
-                                if(bg->GetID() == BATTLEGROUND_WS)
-                                    ((BattleGroundWS*)bg)->EventPlayerReturnedFlag(_player);
-                                obj->Delete();
-                                return;
-                            }
-                            if(_player->GetTeam() == HORDE)
-                                spellId = 23335;            // Silverwing Flag
-                            break;
-                        case 179786:                        // Warsong Flag
-                            if(_player->GetTeam() == HORDE)
-                            {
-                                if(bg->GetID() == BATTLEGROUND_WS)
-                                    ((BattleGroundWS*)bg)->EventPlayerReturnedFlag(_player);
-                                obj->Delete();
-                                return;
-                            }
-                            if(_player->GetTeam() == ALLIANCE)
-                                spellId = 23333;            // Warsong Flag
-                            break;
-                    }
+                    sLog.outDebug( "Teleporting player %u with coordinates X: %f Y: %f Z: %f Orientation: %f Map: %u\n", _player->GetGUIDLow(), fields->X,fields->Y,fields->Z,fields->Orientation,fields->mapId);
+                    _player->TeleportTo(fields->mapId, fields->X,fields->Y,fields->Z,fields->Orientation);
+                    sLog.outDebug( "Player %u teleported by %u\n", _player->GetGUIDLow(), info->sound0);
                 }
-                obj->Delete();
+                else
+                    sLog.outDebug( "Unknown areatrigger_template id %u\n", info->sound0);
+                delete fields;
+                return;
             }
             break;
         default:
-            sLog.outDebug("Unknown Object Type %u\n", obj->GetUInt32Value(GAMEOBJECT_TYPE_ID));
+            sLog.outDebug( "Unknown Object Type %u\n", obj->GetUInt32Value(GAMEOBJECT_TYPE_ID));
             break;
     }
 
-    if (!spellId) return;
-
     SpellEntry const *spellInfo = sSpellStore.LookupEntry( spellId );
+
     if(!spellInfo)
     {
         sLog.outError("WORLD: unknown spell id %i\n", spellId);
@@ -551,19 +448,15 @@ void WorldSession::HandleGameObjectUseOpcode( WorldPacket & recv_data )
     Spell *spell = new Spell(spellCaster, spellInfo, false, 0);
 
     SpellCastTargets targets;
-
-
     targets.setUnitTarget( spellTarget );
-
-    if(obj)
-        targets.setGOTarget( obj );
-
+    targets.setGOTarget( obj );
     spell->prepare(&targets);
+
 }
 
 void WorldSession::HandleCastSpellOpcode(WorldPacket& recvPacket)
 {
-    CHECK_PACKET_SIZE(recvPacket,4+2);
+    CHECK_PACKET_SIZE(recvPacket,4);
 
     uint32 spellId;
 
@@ -580,14 +473,14 @@ void WorldSession::HandleCastSpellOpcode(WorldPacket& recvPacket)
         return;
     }
 
-    // not have spell or spell passive and not casted by client
-    if ( !_player->HasSpell (spellId) || IsPassiveSpell(spellId) )
+    if ( !_player->HasSpell (spellId) )
     {
         //cheater? kick? ban?
         return;
     }
 
-    Spell *spell = new Spell(_player, spellInfo, false, 0);
+    Spell *spell ;
+    spell = new Spell(_player, spellInfo, false, 0);
 
     SpellCastTargets targets;
     targets.read(&recvPacket,_player);
@@ -607,11 +500,6 @@ void WorldSession::HandleCancelAuraOpcode( WorldPacket& recvPacket)
 
     uint32 spellId;
     recvPacket >> spellId;
-
-    // not allow remove non positive spells
-    if(!IsPositiveSpell(spellId))
-        return;
-
     _player->RemoveAurasDueToSpell(spellId);
 }
 
@@ -622,7 +510,6 @@ void WorldSession::HandleCancelGrowthAuraOpcode( WorldPacket& recvPacket)
 
 void WorldSession::HandleCancelAutoRepeatSpellOpcode( WorldPacket& recvPacket)
 {
-    // may be better send SMSG_CANCEL_AUTO_REPEAT?
     // cancel and prepare for deleting
-    _player->SetCurrentCastedSpell(NULL);
+    _player->castSpell(NULL);
 }

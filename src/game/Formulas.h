@@ -28,7 +28,8 @@ namespace MaNGOS
     namespace Honor
     {
         //TODO: Implement this function
-        /*inline int CalculeStanding(Player *plr)
+        // NOTE: DO NOT IMPLEMENT A FUNCTION THAT USES A QUERY, SAVE THE DATA
+        inline int32 CalculeStanding(Player *plr)
         {
             uint64 guid = 0;
             int standing = 0;
@@ -42,9 +43,9 @@ namespace MaNGOS
                 delete result;
             }
             return standing;
-        }*/
+        }
         //TODO: Fix this formula, for now the weekly rating is how many honor player gain all life time
-        /*inline float CalculeRating(Player *plr)
+        inline float CalculeRating(Player *plr)
         {
             return plr->GetTotalHonor();
         }
@@ -82,7 +83,7 @@ namespace MaNGOS
             int f = (4 - total_kills) >= 0 ? (4 - total_kills) : 0;
             int honor_points = int(((float)(f * 0.25)*(float)((k_level+(v_rank*5+1))*(1+0.05*diff_honor)*diff_level)));
             return (honor_points <= 400 ? honor_points : 400);
-        }*/
+        }
 
     }
 
@@ -192,45 +193,20 @@ namespace MaNGOS
 
         inline uint32 mxp(uint32 lvl)
         {
-            if (lvl < 60) {
-                return (45 + (5*lvl));
-            }else{
-                return (235 + (5*lvl));
-            }
+            return (45 + (5*lvl));
         }
 
         inline uint32 xp_to_level(uint32 lvl)
         {
-            uint32 xp = 0;
-            if (lvl < 60) {
-                xp = (8*lvl + xp_Diff(lvl)) * mxp(lvl);
-            }else if (lvl == 60){
-                xp = (155 + mxp(lvl) * (1344 - 69 - ((69 - lvl) * (7 + (69 - lvl) * 8 - 1)/2)));
-            }else{
-                xp = (155 + mxp(lvl) * (1344 - ((69-lvl) * (7 + (69 - lvl) * 8 - 1)/2)));
-            }
-            // The XP to Level is always rounded to the nearest 100 points (50 rounded to low).
-            return ((xp + 49) / 100) * 100;                 // use additional () for prevent free association operations in C++
+            uint32 xp = (8*lvl + xp_Diff(lvl)) * mxp(lvl);
+            // The XP to Level is always rounded to the nearest 100 points.
+            return uint32(( xp + 50 ) * 0.01) * 100;
         }
 
-        inline uint32 xp_to_money(uint32 rewXP, uint32 qlevel)
+        inline uint32 xp_to_money(uint32 xp)
         {
             // for max_level
-            uint32 money = 0;
-            if (qlevel >= 15)
-                money = rewXP / 10;
-            else if (qlevel == 14)
-                money = rewXP / 8;
-            else if (qlevel == 13)
-                money = rewXP / 6;
-            else if (qlevel == 12)
-                money = rewXP / 4;
-            else if (qlevel == 11)
-                money = rewXP / 2;
-            else if (qlevel > 0 && qlevel <= 10)
-                money = rewXP;
-
-            return money;
+            return xp;
         }
     }
 }

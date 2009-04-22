@@ -19,7 +19,7 @@
 #ifndef MANGOSSERVER_GUILD_H
 #define MANGOSSERVER_GUILD_H
 
-#define GUILD_MAXRANKS 10
+#define MAXRANKS 10
 
 enum GuildDefaultRanks
 {
@@ -90,22 +90,6 @@ enum GuildEvents
     GE_SIGNED_OFF      = 13,
 };
 
-enum PetitionTurns
-{
-    PETITION_TURN_OK                     = 0,
-    PETITION_TURN_ALREADY_IN_GUILD       = 2,
-    PETITION_TURN_NEED_MORE_SIGNATURES   = 4,
-};
-
-enum PetitionSigns
-{
-    PETITION_SIGN_OK                 = 0,
-    PETITION_SIGN_ALREADY_SIGNED     = 1,
-    PETITION_SIGN_ALREADY_IN_GUILD   = 2,
-    PETITION_SIGN_CANT_SIGN_OWN      = 3,
-    PETITION_SIGN_NOT_SERVER         = 4,
-};
-
 struct MemberSlot
 {
     uint64 guid;
@@ -153,7 +137,7 @@ class Guild
         uint32 GetBackgroundColor(){ return BackgroundColor; }
 
         void SetLeader(uint64 guid);
-        bool AddMember(uint64 plGuid, uint32 plRank=(uint32)GR_INITIATE);
+        void AddMember(uint64 plGuid, uint32 plRank=(uint32)GR_INITIATE);
         void ChangeRank(uint64 guid, uint32 newRank);
         void DelMember(uint64 guid, bool isDisbanding=false);
 
@@ -167,9 +151,9 @@ class Guild
         MemberList::iterator membersbegin(){ return members.begin(); }
         MemberList::iterator membersEnd(){ return members.end(); }
 
-        bool LoadGuildFromDB(uint32 GuildId);
-        bool LoadRanksFromDB(uint32 GuildId);
-        bool LoadMembersFromDB(uint32 GuildId);
+        void LoadGuildFromDB(uint32 GuildId);
+        void LoadRanksFromDB(uint32 GuildId);
+        void LoadMembersFromDB(uint32 GuildId);
         void LoadPlayerStats(MemberSlot* memslot);
         void LoadPlayerStatsByGuid(uint64 guid);
 

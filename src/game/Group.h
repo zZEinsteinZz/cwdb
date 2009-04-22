@@ -31,15 +31,6 @@ enum RollVote
     NOT_EMITED_YET    = 3,
     NOT_VALID         = 4
 };
-
-enum GroupMemberOnlineStatus
-{
-    MEMBER_STATUS_OFFLINE      = 0,
-    MEMBER_STATUS_ONLINE       = 1,
-    MEMBER_STATUS_OFFLINE_PVP  = 2,
-    MEMBER_STATUS_ONLINE_PVP   = 3
-};
-
 enum GroupType
 {
     GROUPTYPE_NORMAL = 0,
@@ -50,7 +41,7 @@ enum GroupType
 /** todo: uninvite people that not accepted invite **/
 class MANGOS_DLL_SPEC Group
 {
-    public:
+    protected:
         struct MemberSlot
         {
             uint64      guid;
@@ -58,20 +49,13 @@ class MANGOS_DLL_SPEC Group
             uint8       group;
             bool        assistant;
         };
-        typedef std::list<MemberSlot> MemberList;
-        typedef MemberList::const_iterator member_citerator;
-    protected:
-        typedef MemberList::iterator member_witerator;
-        typedef std::set<uint64> InvitesList;
-
         struct Roll
         {
             Roll(): itemGUID(0), itemid(0), itemRandomPropId(0), totalPlayersRolling(0), totalNeed(0), totalGreed(0), totalPass(0), loot(NULL), itemSlot(0) {}
 
             uint64 itemGUID;
             uint32 itemid;
-            uint32 itemRandomSuffix;
-            int32  itemRandomPropId;
+            uint32 itemRandomPropId;
             map<uint64, RollVote> playerVote;               //vote position correspond with player position (in group)
             uint8 totalPlayersRolling;
             uint8 totalNeed;
@@ -85,21 +69,17 @@ class MANGOS_DLL_SPEC Group
         Group()
         {
             m_leaderGuid = 0;
-            m_mainTank   = 0;
-            m_mainAssistant =0;
             m_groupType  = (GroupType)0;
-            m_bgGroup    = false;
             m_lootMethod = (LootMethod)0;
             m_looterGuid = 0;
-            m_lootThreshold = (LootThreshold)2;
             for(int i=0; i<TARGETICONCOUNT; i++)
                 m_targetIcons[i] = 0;
         }
         ~Group() {}
 
         // group manipulation methods
-        bool   Create(const uint64 &guid, const char * name);
-        bool   LoadGroupFromDB(const uint64 &leaderGuid);
+        void   Create(const uint64 &guid, const char * name);
+        void   LoadGroupFromDB(const uint64 &leaderGuid);
         bool   AddInvite(Player *player);
         uint32 RemoveInvite(Player *player);
         bool   AddMember(const uint64 &guid, const char* name);
@@ -108,69 +88,47 @@ class MANGOS_DLL_SPEC Group
         void   ChangeLeader(const uint64 &guid);
         void   SetLootMethod(LootMethod method) { m_lootMethod = method; }
         void   SetLooterGuid(const uint64 &guid) { m_looterGuid = guid; }
-        void   SetLootThreshold(LootThreshold threshold) { m_lootThreshold = threshold; }
         void   Disband(bool hideDestroy=false);
 
         // properties accessories
         bool IsFull() const { return (m_groupType==GROUPTYPE_NORMAL) ? (m_members.size()>=MAXGROUPSIZE) : (m_members.size()>=MAXRAIDSIZE); }
         bool isRaidGroup() { return (m_groupType==GROUPTYPE_RAID); }
-        bool isBGGroup() { return m_bgGroup; }
         const uint64& GetLeaderGUID() const { return m_leaderGuid; }
         LootMethod    GetLootMethod() const { return m_lootMethod; }
         const uint64& GetLooterGuid() const { return m_looterGuid; }
-        LootThreshold GetLootThreshold() const { return m_lootThreshold; }
 
         // member manipulation methods
-        bool IsMember(uint64 guid) const { return _getMemberCSlot(guid) != m_members.end(); }
+        bool IsMember(uint64 guid) const;
         bool IsLeader(uint64 guid) const { return (GetLeaderGUID() == guid); }
         bool IsAssistant(uint64 guid) const
         {
-            member_citerator mslot = _getMemberCSlot(guid);
-            if(mslot==m_members.end())
+            int8 id = _getMemberIndex(guid);
+            if(id<0)
                 return false;
 
-            return mslot->assistant;
-        }
-        uint64 GetNextGuidAfter(uint64 guid) const
-        {
-            member_citerator mslot = _getMemberCSlot(guid);
-            if(mslot==m_members.end())
-                return 0;
-            ++mslot;
-            if(mslot==m_members.end())
-                return 0;
-            return mslot->guid;
+            return m_members[id].assistant;
         }
         bool SameSubGroup(uint64 guid1, uint64 guid2) const
         {
-            member_citerator mslot2 = _getMemberCSlot(guid2);
-            if(mslot2==m_members.end())
+            int8 id1 = _getMemberIndex(guid1);
+            int8 id2 = _getMemberIndex(guid2);
+            if(id1<0 || id2<0)
                 return false;
 
-            return SameSubGroup(guid1,&*mslot2);
+            return (m_members[id1].group==m_members[id2].group);
         }
 
-        bool SameSubGroup(uint64 guid1, MemberSlot const* slot2) const
-        {
-            member_citerator mslot1 = _getMemberCSlot(guid1);
-            if(mslot1==m_members.end() || !slot2)
-                return false;
-
-            return (mslot1->group==slot2->group);
-        }
-
-
-        MemberList const& GetMembers() const { return m_members; }
         uint32 GetMembersCount() const { return m_members.size(); }
         uint32 GetMemberCountForXPAtKill(Unit const* victim);
-        Player* GetMemberForXPAtKill(uint64 guid, Unit const* victim);
+        Player* GetMemberForXPAtKill(uint8 id, Unit const* victim);
+        uint64 GetMemberGUID(uint8 id) const { if(id>=m_members.size()) return 0; else return m_members[id].guid; }
         uint8  GetMemberGroup(uint64 guid) const
         {
-            member_citerator mslot = _getMemberCSlot(guid);
-            if(mslot==m_members.end())
+            int8 id = _getMemberIndex(guid);
+            if(id<0)
                 return (MAXRAIDSIZE/MAXGROUPSIZE+1);
 
-            return mslot->group;
+            return m_members[id].group;
         }
 
         // some additional raid methods
@@ -179,7 +137,6 @@ class MANGOS_DLL_SPEC Group
             _convertToRaid();
             SendUpdate();
         }
-        void SetBattlegroundGroup(const bool &state) { m_bgGroup = state; }
         void ChangeMembersGroup(const uint64 &guid, const uint8 &group)
         {
             if(!isRaidGroup())
@@ -187,34 +144,18 @@ class MANGOS_DLL_SPEC Group
             if(_setMembersGroup(guid, group))
                 SendUpdate();
         }
-        void SetAssistant(const uint64 &guid, const bool &state)
+        void ChangeAssistantFlag(const uint64 &guid, const bool &state)
         {
             if(!isRaidGroup())
                 return;
             if(_setAssistantFlag(guid, state))
                 SendUpdate();
         }
-        void SetMainTank(const uint64 &guid)
-        {
-            if(!isRaidGroup())
-                return;
-            
-            if(_setMainTank(guid))
-                SendUpdate();
-        }
-        void SetMainAssistant(const uint64 &guid)
-        {
-            if(!isRaidGroup())
-                return;
-            
-            if(_setMainAssistant(guid))
-                SendUpdate();
-        }
 
         void SetTargetIcon(uint8 id, uint64 guid);
 
         // -no description-
-        //void SendInit(WorldSession *session);
+        void SendInit(WorldSession *session);
         void SendTargetIconList(WorldSession *session);
         void SendUpdate();
                                                             // ignore: GUID of player that will be ignored
@@ -257,40 +198,16 @@ class MANGOS_DLL_SPEC Group
         void _convertToRaid();
         bool _setMembersGroup(const uint64 &guid, const uint8 &group);
         bool _setAssistantFlag(const uint64 &guid, const bool &state);
-        bool _setMainTank(const uint64 &guid);
-        bool _setMainAssistant(const uint64 &guid);
 
-        member_citerator _getMemberCSlot(uint64 Guid) const
-        {
-            for(member_citerator itr = m_members.begin(); itr != m_members.end(); ++itr)
-            {
-                if (itr->guid == Guid)
-                    return itr;
-            }
-            return m_members.end();
-        }
+        int8 _getMemberIndex(uint64 Guid) const;
 
-        member_witerator _getMemberWSlot(uint64 Guid)
-        {
-            for(member_witerator itr = m_members.begin(); itr != m_members.end(); ++itr)
-            {
-                if (itr->guid == Guid)
-                    return itr;
-            }
-            return m_members.end();
-        }
-
-        MemberList   m_members;
-        InvitesList  m_invitees;
+        vector<MemberSlot> m_members;
+        vector<uint64> m_invitees;
         uint64       m_leaderGuid;
         std::string  m_leaderName;
-        uint64       m_mainTank;
-        uint64       m_mainAssistant;
         GroupType    m_groupType;
-        bool         m_bgGroup;
         uint64       m_targetIcons[TARGETICONCOUNT];
         LootMethod   m_lootMethod;
-        LootThreshold m_lootThreshold;
         uint64       m_looterGuid;
         vector<Roll> RollId;
 };

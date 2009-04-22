@@ -81,7 +81,6 @@ class Aura
         void HandleModThreat(bool Apply, bool Real);
         void HandleModTaunt(bool Apply, bool Real);
         void HandleFeignDeath(bool Apply, bool Real);
-        void HandleAuraModDisarm(bool Apply, bool Real);
         void HandleAuraModStalked(bool Apply, bool Real);
         void HandleAuraWaterWalk(bool Apply, bool Real);
         void HandleAuraFeatherFall(bool Apply, bool Real);
@@ -89,7 +88,7 @@ class Aura
         void HandleAddModifier(bool Apply, bool Real);
         void HandleAuraModStun(bool Apply, bool Real);
         void HandleModDamageDone(bool Apply, bool Real);
-        void HandleAuraUntrackable(bool Apply, bool Real);
+        void HandleModHealingPercent(bool Apply, bool Real);
         void HandleAuraEmpathy(bool Apply, bool Real);
         void HandleModOffhandDamagePercent(bool apply, bool Real);
         void HandleAuraModRangedAttackPower(bool Apply, bool Real);
@@ -103,7 +102,7 @@ class Aura
         void HandleAuraSafeFall(bool Apply, bool Real);
         void HandleAuraDamageShield(bool Apply, bool Real);
         void HandleModStealth(bool Apply, bool Real);
-        void HandleModStealthDetect(bool Apply, bool Real);
+        void HandleModDetect(bool Apply, bool Real);
         void HandleInvisibility(bool Apply, bool Real);
         void HandleInvisibilityDetect(bool Apply, bool Real);
         void HandleAuraModTotalHealthPercentRegen(bool Apply, bool Real);
@@ -159,26 +158,16 @@ class Aura
         void HandleModPercentStat(bool Apply, bool Real);
         void HandleModResistancePercent(bool Apply, bool Real);
         void HandleAuraModBaseResistancePCT(bool Apply, bool Real);
-        void HandleModShieldBlockPCT(bool Apply, bool Real);
-        void HandleAuraTrackStealthed(bool Apply, bool Real);
         void HandleModShieldBlock(bool Apply, bool Real);
+        void HandleAuraTrackStealthed(bool Apply, bool Real);
         void HandleForceReaction(bool Apply, bool Real);
         void HandleAuraModRangedHaste(bool Apply, bool Real);
         void HandleRangedAmmoHaste(bool Apply, bool Real);
         void HandleModHealingDone(bool Apply, bool Real);
+        void HandleModHealingDonePercent(bool Apply, bool Real);
         void HandleModTotalPercentStat(bool Apply, bool Real);
         void HandleAuraModTotalThreat(bool Apply, bool Real);
         void HandleInterruptRegen(bool Apply, bool Real);
-        void HandleAuraModPacify(bool Apply, bool Real);
-        void HandleAuraGhost(bool Apply, bool Real);
-        void HandleAuraAllowFlight(bool Apply, bool Real);
-        void HandleAuraModSpeedMountedFlight(bool Apply, bool Real);
-        void HandleAuraModSpeedFlight(bool Apply, bool Real);
-        void HandleModRating(bool apply, bool Real);
-        void HandleModTargetResistance(bool apply, bool Real);
-        void HandleAuraModAttackPowerPercent(bool apply, bool Real);
-        void HandleAuraModRangedAttackPowerPercent(bool apply, bool Real);
-        void HandleModManaRegen(bool apply, bool Real);
 
         Aura(SpellEntry const* spellproto, uint32 eff, Unit *target, Unit *caster = NULL, Item* castItem = NULL);
         virtual ~Aura();
@@ -188,7 +177,6 @@ class Aura
 
         SpellEntry const* GetSpellProto() const { return m_spellProto; }
         uint32 GetId() const{ return m_spellId; }
-        uint64 GetCastItemGUID() const { return m_castItemGuid; }
         uint32 GetEffIndex() const{ return m_effIndex; }
         void SetEffIndex(uint32 eff) { m_effIndex = eff; }
         int32 GetAuraDuration() const { return m_duration; }
@@ -243,8 +231,7 @@ class Aura
         Unit* m_target;
         int32 m_duration;
         int32 m_timeCla;
-        // it is NOT safe to keep a pointer to the item because it may get deleted
-        uint64 m_castItemGuid;
+        Item* m_castItem;
         time_t m_applyTime;
 
         uint8 m_auraSlot;

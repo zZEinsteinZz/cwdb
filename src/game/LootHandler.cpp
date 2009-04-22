@@ -44,14 +44,14 @@ void WorldSession::HandleAutostoreLootItemOpcode( WorldPacket & recv_data )
             ObjectAccessor::Instance().GetGameObject(*player, lguid);
 
         // not check distance for GO in case owned GO (fishing bobber case, for example)
-        if (!go || go->GetOwnerGUID() != _player->GetGUID() && !go->IsWithinDistInMap(_player,INTERACTION_DISTANCE))
+        if (!go || go->GetOwnerGUID() != _player->GetGUID() && !go->IsWithinDistInMap(_player,OBJECT_ITERACTION_DISTANCE))
             return;
 
         loot = &go->loot;
     }
     else if (IS_ITEM_GUID(lguid))
     {
-        Item *pItem = player->GetItemByGuid( lguid );
+        Item *pItem = player->GetItemByPos( player->GetPosByGuid( lguid ));
 
         if (!pItem)
             return;
@@ -65,7 +65,7 @@ void WorldSession::HandleAutostoreLootItemOpcode( WorldPacket & recv_data )
 
         bool ok_loot = pCreature && pCreature->isAlive() == (player->getClass()==CLASS_ROGUE && pCreature->lootForPickPocketed);
 
-        if( !ok_loot || !pCreature->IsWithinDistInMap(_player,INTERACTION_DISTANCE) )
+        if( !ok_loot || !pCreature->IsWithinDistInMap(_player,OBJECT_ITERACTION_DISTANCE) )
             return;
 
         loot = &pCreature->loot;
@@ -141,7 +141,7 @@ void WorldSession::HandleLootMoneyOpcode( WorldPacket & recv_data )
         GameObject *pGameObject = ObjectAccessor::Instance().GetGameObject(*GetPlayer(), guid);
 
         // not check distance for GO in case owned GO (fishing bobber case, for example)
-        if( pGameObject && (pGameObject->GetOwnerGUID()==_player->GetGUID() || pGameObject->IsWithinDistInMap(_player,INTERACTION_DISTANCE)) )
+        if( pGameObject && (pGameObject->GetOwnerGUID()==_player->GetGUID() || pGameObject->IsWithinDistInMap(_player,OBJECT_ITERACTION_DISTANCE)) )
             pLoot = &pGameObject->loot;
     }
     else
@@ -150,7 +150,7 @@ void WorldSession::HandleLootMoneyOpcode( WorldPacket & recv_data )
 
         bool ok_loot = pCreature && pCreature->isAlive() == (player->getClass()==CLASS_ROGUE && pCreature->lootForPickPocketed);
 
-        if ( ok_loot && pCreature->IsWithinDistInMap(_player,INTERACTION_DISTANCE) )
+        if ( ok_loot && pCreature->IsWithinDistInMap(_player,OBJECT_ITERACTION_DISTANCE) )
             pLoot = &pCreature->loot ;
     }
 
@@ -159,12 +159,14 @@ void WorldSession::HandleLootMoneyOpcode( WorldPacket & recv_data )
         if (player->groupInfo.group)
         {
             Group *group = player->groupInfo.group;
+            uint32 iMembers = group->GetMembersCount();
 
+            // it is probably more costly to call getplayer for each member
+            // than temporarily storing them in a vector
             std::vector<Player*> playersNear;
-            Group::MemberList const& members = group->GetMembers();
-            for(Group::member_citerator itr = members.begin(); itr != members.end(); ++itr)
+            for (int i=0; i<iMembers; i++)
             {
-                Player* playerGroup = objmgr.GetPlayer(itr->guid);
+                Player* playerGroup = objmgr.GetPlayer(group->GetMemberGUID(i));
                 if(!playerGroup)
                     continue;
                 if (player->GetDistance2dSq(playerGroup) < sWorld.getConfig(CONFIG_GROUP_XP_DISTANCE))
@@ -222,7 +224,7 @@ void WorldSession::HandleLootReleaseOpcode( WorldPacket & recv_data )
             ObjectAccessor::Instance().GetGameObject(*player, lguid);
 
         // not check distance for GO in case owned GO (fishing bobber case, for example)
-        if (!go || go->GetOwnerGUID() != _player->GetGUID() && !go->IsWithinDistInMap(_player,INTERACTION_DISTANCE))
+        if (!go || go->GetOwnerGUID() != _player->GetGUID() && !go->IsWithinDistInMap(_player,OBJECT_ITERACTION_DISTANCE))
             return;
 
         loot = &go->loot;
@@ -237,53 +239,8 @@ void WorldSession::HandleLootReleaseOpcode( WorldPacket & recv_data )
         }
         else if (loot->isLooted() || go->GetGoType() == GAMEOBJECT_TYPE_FISHINGNODE)
         {
-            // GO is mineral vein? so it is not removed after its looted
-            if(go->GetGoType() == GAMEOBJECT_TYPE_CHEST) 
-            { 
-                uint32 go_min = go->GetGOInfo()->sound4;
-                uint32 go_max = go->GetGOInfo()->sound5;
-
-                // only vein pass this check
-                if(go_min != 0 && go_max > go_min)
-                {
-                    float amount_rate = sWorld.getRate(RATE_MINING_AMOUNT);
-                    float min_amount = go_min*amount_rate;
-                    float max_amount = go_max*amount_rate;
-
-                    go->AddUse(player);
-                    float uses = float(go->GetUseCount());
-
-                    if(uses < max_amount)
-                    {
-                        if(uses >= min_amount)
-                        {
-                            float chance_rate = sWorld.getRate(RATE_MINING_NEXT);
-
-                            int32 ReqValue = 175;
-                            LockEntry const *lockInfo = sLockStore.LookupEntry(go->GetGOInfo()->sound0);
-                            if(lockInfo)
-                                ReqValue = lockInfo->requiredminingskill;
-                            float skill = float(player->GetSkillValue(SKILL_MINING))/(ReqValue+25);
-                            double chance = pow(0.8*chance_rate,4*(1/double(max_amount))*double(uses));
-                            if(roll_chance_f(100*chance+skill))
-                            {
-                                go->SetLootState(GO_CLOSED);
-                            }
-                            else                            // not have more uses
-                                go->SetLootState(GO_LOOTED);
-                        }
-                        else                                // 100% chance until min uses
-                            go->SetLootState(GO_CLOSED);
-                    }
-                    else                                    // max uses already
-                        go->SetLootState(GO_LOOTED);
-                }
-                else                                        // not vein
-                    go->SetLootState(GO_LOOTED);
-            }
-            else                                            // not chest (or vein/herb/etc)
-                go->SetLootState(GO_LOOTED);
-
+            // normal looted GO case
+            go->SetLootState(GO_LOOTED);
             loot->clear();
         }
         else
@@ -293,22 +250,7 @@ void WorldSession::HandleLootReleaseOpcode( WorldPacket & recv_data )
     else if (IS_ITEM_GUID(lguid))
     {
         uint16 pos = player->GetPosByGuid( lguid );
-        Item *pItem = player->GetItemByPos(pos);
-        if(!pItem)
-            return;
-        if( pItem->GetProto()->BagFamily == BAG_FAMILY_MINING_SUPP &&
-            pItem->GetProto()->Class == ITEM_CLASS_TRADE_GOODS &&
-            pItem->GetCount() >= 5)
-        {
-            pItem->m_lootGenerated = false;
-            pItem->loot.clear();
-
-            uint32 count = 5;
-            player->DestroyItemCount(pItem, count, true);
-        }
-        else
-            // FIXME: item don't must be deleted in case not fully looted state. But this pre-request implement loot saving in DB at item save. Or checting possible.
-            player->DestroyItem( (pos >> 8),(pos & 255), true);
+        player->DestroyItem( (pos >> 8),(pos & 255), true);
         return;                                             // item can be looted only single player
     }
     else
@@ -317,7 +259,7 @@ void WorldSession::HandleLootReleaseOpcode( WorldPacket & recv_data )
             ObjectAccessor::Instance().GetCreature(*player, lguid);
 
         bool ok_loot = pCreature && pCreature->isAlive() == (player->getClass()==CLASS_ROGUE && pCreature->lootForPickPocketed);
-        if ( !ok_loot || !pCreature->IsWithinDistInMap(_player,INTERACTION_DISTANCE) )
+        if ( !ok_loot || !pCreature->IsWithinDistInMap(_player,OBJECT_ITERACTION_DISTANCE) )
             return;
 
         loot = &pCreature->loot;

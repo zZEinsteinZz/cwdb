@@ -76,7 +76,7 @@ enum InventoryChangeFailure
     EQUIP_ERR_YOU_ARE_STUNNED                    = 37,
     EQUIP_ERR_YOU_ARE_DEAD                       = 38,
     EQUIP_ERR_CANT_DO_RIGHT_NOW                  = 39,
-    EQUIP_ERR_INT_BAG_ERROR                      = 40,
+    EQUIP_ERR_BAG_FULL2                          = 40,
     EQUIP_ERR_CAN_EQUIP_ONLY1_QUIVER2            = 41,
     EQUIP_ERR_CAN_EQUIP_ONLY1_AMMOPOUCH          = 42,
     EQUIP_ERR_STACKABLE_CANT_BE_WRAPPED          = 43,
@@ -101,14 +101,7 @@ enum InventoryChangeFailure
     EQUIP_ERR_BAG_FULL6                          = 62,
     EQUIP_ITEM_RANK_NOT_ENOUGH                   = 63,
     EQUIP_ITEM_REPUTATION_NOT_ENOUGH             = 64,
-    EQUIP_MORE_THAN1_SPECIAL_BAG                 = 65,
-    EQUIP_CANT_LOOT_NOW                          = 66,
-    EQUIP_CANT_EQUIP_MORE_THAN_ONE_OF_THAT       = 67,
-    EQUIP_DONT_HAVE_REQITEMS_FOR_THAT_PURCHASE   = 68,
-    EQUIP_DONT_HAVE_ENOUGHT_HONOR_POINTS         = 69,
-    EQUIP_DONT_HAVE_ENOUGHT_ARENA_POINTS         = 70,
-    EQUIP_MAX_GEMS_IN_INVENTORY                  = 71,
-    EQUIP_CANT_MAIL_SOULBOUND                    = 72
+    EQUIP_MORE_THAN1_SPECIAL_BAG                 = 65
 };
 
 enum BuyFailure
@@ -119,44 +112,15 @@ enum BuyFailure
     BUY_ERR_SELLER_DONT_LIKE_YOU                 = 4,
     BUY_ERR_DISTANCE_TOO_FAR                     = 5,
     BUY_ERR_CANT_CARRY_MORE                      = 8,
-    BUY_ERR_LEVEL_REQUIRED                       = 11, // 2.0.1 - rank
-    BUY_ERR_REPUTATION_REQUIRED                  = 12
+    BUY_ERR_LEVEL_REQUIRE                        = 11,
+    BUY_ERR_REPUTATION_REQUIRE                   = 12
 };
 
 enum SellFailure
 {
     SELL_ERR_CANT_FIND_ITEM                      = 1,
-    SELL_ERR_CANT_SELL_ITEM                      = 2, // merchant doesn't like that item
-    SELL_ERR_CANT_FIND_VENDOR                    = 3, // merchant doesn't like you
-    SELL_ERR_YOU_DONT_OWN_THAT_ITEM              = 4, // you don't own that item
-    SELL_ERR_UNK                                 = 5, // nothing appears...
-    SELL_ERR_ONLY_EMPTY_BAG                      = 6  // can only do with empty bags
-};
-
-// -1 from client enchantment slot number
-enum EnchantmentSlot
-{
-    PERM_ENCHANTMENT_SLOT       = 0,
-    TEMP_ENCHANTMENT_SLOT       = 1,
-    SOCK_ENCHANTMENT_SLOT       = 2,
-    SOCK_ENCHANTMENT_SLOT_2     = 3,
-    SOCK_ENCHANTMENT_SLOT_3     = 4,
-    BONUS_ENCHANTMENT_SLOT      = 5,
-    MAX_INSPECTED_ENCHANTMENT_SLOT = 6,
-
-    PROP_ENCHANTMENT_SLOT_0     = 6,                        // used with RandomSuffix   (or have HELD enchantments)
-    PROP_ENCHANTMENT_SLOT_1     = 7,                        // used with RandomSuffix   (or have HELD enchantments)
-    PROP_ENCHANTMENT_SLOT_2     = 8,                        // used with RandomSuffix and RandomProperty
-    PROP_ENCHANTMENT_SLOT_3     = 9,                        // used with RandomProperty (or have HELD enchantments)
-    PROP_ENCHANTMENT_SLOT_4     = 10,                       // used with RandomProperty (or have HELD enchantments)
-    MAX_ENCHANTMENT_SLOT        = 11
-};
-
-enum EnchantmentOffset
-{
-    ENCHANTMENT_ID_OFFSET       = 0,
-    ENCHANTMENT_DURATION_OFFSET = 1,
-    ENCHANTMENT_CHARGES_OFFSET  = 2
+    SELL_ERR_CANT_SELL_ITEM                      = 2,
+    SELL_ERR_CANT_FIND_VENDOR                    = 3
 };
 
 enum ItemUpdateState
@@ -197,13 +161,11 @@ class MANGOS_DLL_SPEC Item : public Object
         bool IsInTrade() const { return mb_in_trade; }
 
         bool IsFitToSpellRequirements(SpellEntry const* spellInfo) const;
-        bool GemsFitSockets() const;
 
         uint32 GetEntry() const { return GetUInt32Value(OBJECT_FIELD_ENTRY); }
         uint32 GetCount() const { return GetUInt32Value (ITEM_FIELD_STACK_COUNT); }
         void SetCount(uint32 value) { SetUInt32Value (ITEM_FIELD_STACK_COUNT, value); }
         uint32 GetMaxStackCount() const { return GetProto()->Stackable ? GetProto()->Stackable : 1; }
-        uint8 GetGemCountWithID(uint32 GemID) const;
 
         uint8 GetSlot() const {return m_slot;}
         Bag *GetContainer() { return m_container; }
@@ -218,23 +180,10 @@ class MANGOS_DLL_SPEC Item : public Object
         uint32 GetSkill();
         uint32 GetSpell();
 
-        // RandomPropertyId (signed but stored as unsigned)
-        int32 GetItemRandomPropertyId() const { return int32(GetUInt32Value(ITEM_FIELD_RANDOM_PROPERTIES_ID)); }
-        uint32 GetItemSuffixFactor() const { return GetUInt32Value(ITEM_FIELD_SUFFIX_FACTOR); }
-        void SetItemRandomProperties(int32 randomPropId);
-        static int32 GenerateItemRandomPropertyId(uint32 item_id);
-        void SetEnchantment(EnchantmentSlot slot, uint32 id, uint32 duration, uint32 charges);
-        void SetEnchantmentDuration(EnchantmentSlot slot, uint32 duration);
-        void SetEnchantmentCharges(EnchantmentSlot slot, uint32 charges);
-        void ClearEnchantment(EnchantmentSlot slot);
-        uint32 GetEnchantmentId(EnchantmentSlot slot) const { return GetUInt32Value(ITEM_FIELD_ENCHANTMENT + slot*3 + ENCHANTMENT_ID_OFFSET);}
-        uint32 GetEnchantmentDuration(EnchantmentSlot slot) const { return GetUInt32Value(ITEM_FIELD_ENCHANTMENT + slot*3 + ENCHANTMENT_DURATION_OFFSET);}
-        uint32 GetEnchantmentCharges(EnchantmentSlot slot) const { return GetUInt32Value(ITEM_FIELD_ENCHANTMENT + slot*3 + ENCHANTMENT_CHARGES_OFFSET);}
-
-        // spell charges (signed but stored as unsigned)
-        int32 GetSpellCharges(uint8 index/*0..5*/ = 0) const { return int32(GetUInt32Value(ITEM_FIELD_SPELL_CHARGES + index)); }
-        void  SetSpellCharges(uint8 index/*0..5*/, int32 value) { SetUInt32Value(ITEM_FIELD_SPELL_CHARGES + index,uint32(value)); }
-
+        uint32 GetItemRandomPropertyId() const { return GetUInt32Value(ITEM_FIELD_RANDOM_PROPERTIES_ID); }
+        void SetItemRandomProperties(uint32 randomPropId);
+        static uint32 GenerateItemRandomPropertyId(uint32 item_id);
+        static float GetEnchantMod(uint32 enchant_id, ItemPrototype const * itemProto);
         Loot loot;
         bool m_lootGenerated;
 
@@ -250,13 +199,8 @@ class MANGOS_DLL_SPEC Item : public Object
             uState = state;
         }
 
-        bool hasQuest(uint32 quest_id) const 
-        {
-            ItemPrototype const *itemProto = GetProto();
-            return itemProto && itemProto->StartQuest == quest_id;
-        }
-        bool hasInvolvedQuest(uint32 quest_id) const { return false; }
-
+    protected:
+        void _LoadQuests();
     private:
         uint8 m_slot;
         Bag *m_container;

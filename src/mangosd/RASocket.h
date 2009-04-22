@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright (C) 2005,2006,2007 MaNGOS <http://www.mangosproject.org/>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -26,16 +26,22 @@
 #include "Common.h"
 #include "Network/TcpSocket.h"
 
+#ifdef ENABLE_RA
+
+#ifndef ENABLE_CLI
+#error CLI is required
+#endif
+
 #define RA_BUFF_SIZE 1024
 
-class ISocketHandler;
+class SocketHandler;
 
 /// Remote Administration socket
 class RASocket: public TcpSocket
 {
     public:
 
-        RASocket(ISocketHandler& h);
+        RASocket(SocketHandler& h);
         ~RASocket();
 
         void OnAccept();
@@ -45,6 +51,7 @@ class RASocket: public TcpSocket
 
         char * buff;
         std::string szLogin;
+        std::string szPass;
         uint32 iSess;
         unsigned int iInputLength;
         bool bLog;
@@ -59,7 +66,9 @@ class RASocket: public TcpSocket
             OK,                                             //both login and pass were given, and they are correct and user have enough priv.
         }stage;
 
+        void Log(const char *,...);
         static int zprintf( const char * szText, ... );
 };
+#endif
 #endif
 /// @}

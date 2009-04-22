@@ -28,16 +28,13 @@ class Database
 
         virtual ~Database() {}
 
-        virtual bool Initialize(const char *infoString);
+        virtual bool Initialize(const char *infoString) = 0;
 
         virtual QueryResult* Query(const char *sql) = 0;
         virtual QueryResult* PQuery(const char *format,...) = 0;
 
         virtual bool Execute(const char *sql) = 0;
         virtual bool PExecute(const char *format,...) = 0;
-
-        // Writes SQL commands to a LOG file (see mangosd.conf "LogSQL")
-        bool PExecuteLog(const char *format,...);
 
         virtual bool BeginTransaction()                     // nothing do if DB not support transactions
         {
@@ -61,8 +58,5 @@ class Database
         virtual void ThreadStart();
         // must be called before finish thread run (one time for thread using one from existed Database objects)
         virtual void ThreadEnd();
-    private:
-        // 0 - do not log, 1 - log sql commands        
-        uint32 m_logSQL;
 };
 #endif

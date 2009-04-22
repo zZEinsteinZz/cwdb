@@ -41,7 +41,6 @@ LootStore LootTemplates_Item;
 LootStore LootTemplates_Pickpocketing;
 LootStore LootTemplates_Skinning;
 LootStore LootTemplates_Disenchant;
-LootStore LootTemplates_Prospecting;
 
 void UnloadLoot()
 {
@@ -52,7 +51,6 @@ void UnloadLoot()
     LootTemplates_Pickpocketing.clear();
     LootTemplates_Skinning.clear();
     LootTemplates_Disenchant.clear();
-    LootTemplates_Prospecting.clear();
 }
 
 void LoadLootTable(LootStore& lootstore,char const* tablename)
@@ -134,7 +132,6 @@ void LoadLootTables()
     LoadLootTable(LootTemplates_Item,         "item_loot_template");
     LoadLootTable(LootTemplates_Pickpocketing,"pickpocketing_loot_template");
     LoadLootTable(LootTemplates_Skinning,     "skinning_loot_template");
-    LoadLootTable(LootTemplates_Prospecting,  "prospecting_loot_template");
 }
 
 #define MaxLootGroups 8
@@ -236,20 +233,14 @@ void FillLoot(Loot *loot, uint32 loot_id, LootStore& store)
     {
         // There are stats of count variations for 100% drop - so urand used
         if ( loot->quest_items.size() < MAX_NR_QUEST_ITEMS && hasQuestChance(*item_iter) )
-            loot->quest_items.push_back(
-                LootItem(*item_iter, urand(item_iter->mincount, item_iter->maxcount),
-                GenerateEnchSuffixFactor(item_iter->itemid),
-                Item::GenerateItemRandomPropertyId(item_iter->itemid))
-                );
+            loot->quest_items.push_back(LootItem(*item_iter, urand(item_iter->mincount, item_iter->maxcount),Item::GenerateItemRandomPropertyId(item_iter->itemid)));
         else if ( loot->items.size() < MAX_NR_LOOT_ITEMS )
         {
             LootStoreItem* LootedItem = hasChance(*item_iter);
             if ( LootedItem )
                 loot->items.push_back(
                     LootItem(*LootedItem, urand(LootedItem->mincount, LootedItem->maxcount),
-                    GenerateEnchSuffixFactor(LootedItem->itemid),
-                    Item::GenerateItemRandomPropertyId(LootedItem->itemid))
-                    );
+                    Item::GenerateItemRandomPropertyId(LootedItem->itemid)));
         }
     }
     loot->unlootedCount = loot->items.size();
@@ -352,7 +343,7 @@ ByteBuffer& operator<<(ByteBuffer& b, LootItem const& li)
     b << uint32(li.itemid);
     b << uint32(li.count);                                  // nr of items of this type
     b << uint32(li.displayid);
-    b << uint32(li.randomSuffix);
+    b << uint32(0);
     b << uint32(li.randomPropertyId);
     b << uint8(0);
     return b;

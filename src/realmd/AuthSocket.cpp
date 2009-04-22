@@ -64,7 +64,7 @@ enum eStatus
 #pragma pack(push,1)
 #endif
 
-typedef struct AUTH_LOGON_CHALLENGE_C
+typedef struct
 {
     uint8   cmd;
     uint8   error;
@@ -100,7 +100,7 @@ typedef struct
 } sAuthLogonChallenge_S;
 */
 
-typedef struct AUTH_LOGON_PROOF_C
+typedef struct
 {
     uint8   cmd;
     uint8   A[32];
@@ -118,16 +118,15 @@ typedef struct
     uint16  unk4[20];
 }  sAuthLogonProofKey_C;
 */
-typedef struct AUTH_LOGON_PROOF_S
+typedef struct
 {
     uint8   cmd;
     uint8   error;
     uint8   M2[20];
     uint32  unk2;
-    uint16  unk3;
 } sAuthLogonProof_S;
 
-typedef struct XFER_INIT
+typedef struct
 {
     uint8 cmd;                                              //XFER_INITIATE
     uint8 size;                                             //strlen("Patch");
@@ -136,14 +135,14 @@ typedef struct XFER_INIT
     uint8 md5[MD5_DIGEST_LENGTH];
 }XFER_INIT;
 
-typedef struct XFER_DATA
+typedef struct
 {
     uint8 opcode;
     uint16 data_size;
     uint8 data[ChunkSize];
 }XFER_DATA_STRUCT;
 
-typedef struct AuthHandler
+typedef struct
 {
     eAuthCmd cmd;
     uint32 status;
@@ -168,7 +167,7 @@ class PatcherRunnable: public ZThread::Runnable
         AuthSocket * mySocket;
 };
 
-typedef struct PATCH_INFO
+typedef struct
 {
     uint8 md5[MD5_DIGEST_LENGTH];
 }PATCH_INFO;
@@ -206,7 +205,7 @@ const AuthHandler table[] =
 Patcher PatchesCache;
 
 /// Constructor - set the N and g values for SRP6
-AuthSocket::AuthSocket(ISocketHandler &h) : TcpSocket(h)
+AuthSocket::AuthSocket(SocketHandler &h) : TcpSocket(h)
 {
     N.SetHexStr("894B645E89E1535BBDAD5B8B290650530801B18EBFBF5E8FAB3C82872A3E9BB7");
     g.SetDword(7);
@@ -242,14 +241,7 @@ void AuthSocket::OnRead()
             return;
 
         ///- Get the command out of it
-        ibuf.SoftRead((char *)&_cmd, 1); // UQ1: No longer exists in new net code ???
-        //ibuf.Read((char *)&_cmd, 1);
-        /*char *command = (char *)malloc(1);
-
-        ibuf.Read(command, 1);
-
-        _cmd = (uint8)command;*/
-//      assert(0);
+        ibuf.SoftRead((char *)&_cmd, 1);
         size_t i;
 
         ///- Circle through known commands and call the correct command handler
@@ -279,29 +271,24 @@ void AuthSocket::OnRead()
     }
 }
 
-/// Make the SRP6 calculation from hash in dB
-void AuthSocket::_SetVSFields(std::string rI)
+/// Upper password, and make the SRP6 calculation
+void AuthSocket::_SetVSFields(std::string password)
 {
-    BigNumber I;
-    I.SetHexStr(rI.c_str());
+    std::transform(password.begin(), password.end(), password.begin(), std::towupper);
 
-    //In case of leading zeroes in the rI hash, restore them
-    uint8 mDigest[SHA_DIGEST_LENGTH];
-    memset(mDigest,0,SHA_DIGEST_LENGTH);
-    if (I.GetNumBytes() <= SHA_DIGEST_LENGTH)
-        memcpy(mDigest,I.AsByteArray(),I.GetNumBytes());
-
-    std::reverse(mDigest,mDigest+SHA_DIGEST_LENGTH);
-
+    Sha1Hash I;
+    std::string sI = _login + ":" + password;
+    I.UpdateData(sI);
+    I.Finalize();
     Sha1Hash sha;
     sha.UpdateData(s.AsByteArray(), s.GetNumBytes());
-    sha.UpdateData(mDigest, SHA_DIGEST_LENGTH);
+    sha.UpdateData(I.GetDigest(), 20);
     sha.Finalize();
     BigNumber x;
     x.SetBinary(sha.GetDigest(), sha.GetLength());
     v = g.ModExp(x, N);
     // No SQL injection (username escaped)
-    dbRealmServer.PExecute("UPDATE `account` SET `v` = '%s', `s` = '%s' WHERE UPPER(`username`)= UPPER('%s')",v.AsHexStr(),s.AsHexStr(), _safelogin.c_str() );
+    dbRealmServer.PExecute("UPDATE `account` SET `v` = '%s', `s` = '%s' WHERE `username` = '%s'",v.AsHexStr(),s.AsHexStr(), _safelogin.c_str() );
 }
 
 /// Logon Challenge command handler
@@ -359,8 +346,7 @@ bool AuthSocket::_HandleLogonChallenge()
 
         ///- Verify that this IP is not in the ip_banned table
         // No SQL injection possible (paste the IP address as passed by the socket)
-        dbRealmServer.Execute("DELETE FROM `ip_banned` WHERE `unbandate`<=UNIX_TIMESTAMP() AND `unbandate`<>`bandate`");
-        QueryResult *result = dbRealmServer.PQuery(  "SELECT * FROM `ip_banned` WHERE `ip` = '%s'",GetRemoteAddress().c_str());
+        QueryResult *result = dbRealmServer.PQuery(  "SELECT * FROM `ip_banned` WHERE `ip` = '%s';",GetRemoteAddress().c_str());
         if(result)
         {
             pkt << (uint8)REALM_AUTH_ACCOUNT_BANNED;
@@ -371,8 +357,7 @@ bool AuthSocket::_HandleLogonChallenge()
         {
             ///- Get the account details from the account table
             // No SQL injection (escaped user name)
-
-            QueryResult *result = dbRealmServer.PQuery("SELECT `I`,`id`,`locked`,`last_ip`,`online` FROM `account` WHERE `username` = '%s'",_safelogin.c_str ());
+            QueryResult *result = dbRealmServer.PQuery("SELECT `password`,`banned`,`locked`,`last_ip`,`online` FROM `account` WHERE `username` = '%s'",_safelogin.c_str ());
             if( result )
             {
                 ///- If the IP is 'locked', check that the player comes indeed from the correct IP address
@@ -399,49 +384,44 @@ bool AuthSocket::_HandleLogonChallenge()
 
                 if (!locked)
                 {
-                    //set expired bans to inactive
-                    dbRealmServer.Execute("UPDATE `account_banned` SET `active` = 0 WHERE `unbandate`<=UNIX_TIMESTAMP() AND `unbandate`<>`bandate`");
                     ///- If the account is banned, reject the logon attempt
-                    QueryResult *banresult = dbRealmServer.PQuery("SELECT `bandate`,`unbandate` FROM `account_banned` WHERE `id` = %u AND `active` = 1", (*result)[1].GetUInt32());
-                    if(banresult)
+                    if((*result)[1].GetUInt8())
                     {
-                        if((*banresult)[0].GetUInt64() == (*banresult)[1].GetUInt64())
-                        {
-                            pkt << (uint8) REALM_AUTH_ACCOUNT_BANNED;
-                            sLog.outBasic("[AuthChallenge] Banned account %s tries to login!",_login.c_str ());
-                        }
-                        else
-                        {
-                            pkt << (uint8) REALM_AUTH_ACCOUNT_FREEZED;
-                            sLog.outBasic("[AuthChallenge] Temporarily banned account %s tries to login!",_login.c_str ());
-                        }
-
-                        delete banresult;
+                        pkt << (uint8) REALM_AUTH_ACCOUNT_BANNED;
+                        sLog.outBasic("[AuthChallenge] Banned account %s tries to login!",_login.c_str ());
                     }
                     else
                     {
-                        ///- Get the password from the account table, upper it, and make the SRP6 calculation
-                        std::string rI = (*result)[0].GetCppString();
-                        _SetVSFields(rI);
+                        ///- If the user is already logged in, reject the logon attempt
+                        //if((*result)[4].GetUInt8() == 1)
+                        //{
+                        //    pkt << (uint8)REALM_AUTH_ACCOUNT_IN_USE;
+                        //}
+                        //else
+                        {
+                            ///- Get the password from the account table, upper it, and make the SRP6 calculation
+                            std::string password = (*result)[0].GetCppString();
+                            _SetVSFields(password);
 
-                        b.SetRand(19 * 8);
-                        BigNumber gmod=g.ModExp(b, N);
-                        B = ((v * 3) + gmod) % N;
-                        ASSERT(gmod.GetNumBytes() <= 32);
+                            b.SetRand(19 * 8);
+                            BigNumber gmod=g.ModExp(b, N);
+                            B = ((v * 3) + gmod) % N;
+                            ASSERT(gmod.GetNumBytes() <= 32);
 
-                        BigNumber unk3;
-                        unk3.SetRand(16*8);
+                            BigNumber unk3;
+                            unk3.SetRand(16*8);
 
-                        ///- Fill the response packet with the result
-                        pkt << (uint8)REALM_AUTH_SUCCESS;
-                        pkt.append(B.AsByteArray(), 32);
-                        pkt << (uint8)1;
-                        pkt.append(g.AsByteArray(), 1);
-                        pkt << (uint8)32;
-                        pkt.append(N.AsByteArray(), 32);
-                        pkt.append(s.AsByteArray(), s.GetNumBytes());
-                        pkt.append(unk3.AsByteArray(), 16);
-                        pkt << (uint8)0;                // Added in 1.12.x client branch
+                            ///- Fill the response packet with the result
+                            pkt << (uint8)REALM_AUTH_SUCCESS;
+                            pkt.append(B.AsByteArray(), 32);
+                            pkt << (uint8)1;
+                            pkt.append(g.AsByteArray(), 1);
+                            pkt << (uint8)32;
+                            pkt.append(N.AsByteArray(), 32);
+                            pkt.append(s.AsByteArray(), s.GetNumBytes());
+                            pkt.append(unk3.AsByteArray(), 16);
+                            pkt << (uint8)0;                // Added in 1.12.x client branch
+                        }
                     }
                 }
                 delete result;
@@ -487,7 +467,7 @@ bool AuthSocket::_HandleLogonChallenge()
             }
 
             ///- Send a packet to the client with the file length and MD5 hash
-            uint8 data[2]={AUTH_LOGON_PROOF,REALM_AUTH_UPDATE_CLIENT};
+            uint8 data[2]={AUTH_LOGON_PROOF,CSTATUS_NEGOTIATION_FAILED};
             SendBuf((const char*)data,sizeof(data));
 
             memcpy(&xferh,"0\x05Patch",7);
@@ -601,7 +581,6 @@ bool AuthSocket::_HandleLogonProof()
         proof.cmd = AUTH_LOGON_PROOF;
         proof.error = 0;
         proof.unk2 = 0;
-        proof.unk3 = 0;
 
         SendBuf((char *)&proof, sizeof(proof));
 
@@ -610,7 +589,7 @@ bool AuthSocket::_HandleLogonProof()
     }
     else
     {
-        char data[4]={AUTH_LOGON_PROOF,REALM_AUTH_NO_MATCH,3,0};
+        char data[2]={AUTH_LOGON_PROOF,REALM_AUTH_NO_MATCH};
         SendBuf(data,sizeof(data));
     }
     return true;
@@ -627,8 +606,7 @@ bool AuthSocket::_HandleRealmList()
 
     ///- Get the user id (else close the connection)
     // No SQL injection (escaped user name)
-
-    QueryResult *result = dbRealmServer.PQuery("SELECT `id`,`I` FROM `account` WHERE `username` = '%s'",_safelogin.c_str());
+    QueryResult *result = dbRealmServer.PQuery("SELECT `id`,`password` FROM `account` WHERE `username` = '%s'",_safelogin.c_str());
     if(!result)
     {
         sLog.outError("[ERROR] user %s tried to login and we cannot find him in the database.",_login.c_str());
@@ -637,7 +615,7 @@ bool AuthSocket::_HandleRealmList()
     }
 
     uint32 id = (*result)[0].GetUInt32();
-    std::string rI = (*result)[1].GetCppString();
+    std::string password = (*result)[1].GetCppString();
     delete result;
 
     ///- Circle through realms in the RealmList and construct the return packet (including # of user characters in each realm)
@@ -645,13 +623,12 @@ bool AuthSocket::_HandleRealmList()
 
     ByteBuffer pkt;
     pkt << (uint32) 0;
-    pkt << (uint16) m_realmList.size();
+    pkt << (uint8) m_realmList.size();
     RealmList::RealmMap::const_iterator i;
     for( i = m_realmList.begin(); i != m_realmList.end(); i++ )
     {
-        pkt << i->second->icon;     // realm type
-        pkt << (uint8) 0;           // if 1, then realm locked
-        pkt << i->second->color;    // if 2, then realm is offline
+        pkt << (uint32) i->second->icon;
+        pkt << (uint8) i->second->color;
         pkt << i->first;
         pkt << i->second->address;
         /// \todo Fix realm population
@@ -664,12 +641,16 @@ bool AuthSocket::_HandleRealmList()
             AmountOfCharacters = fields[0].GetUInt8();
             delete result;
         }
-        pkt << AmountOfCharacters;
-        pkt << i->second->timezone;
-        pkt << (uint8) 0x2C; // unk, may be realm number/id?
+        else
+        {
+            AmountOfCharacters = 0;
+        }
+        pkt << (uint8) AmountOfCharacters;
+        pkt << (uint8) i->second->timezone;
+        pkt << (uint8) 0;
     }
-    pkt << (uint8) 0x10;
-    pkt << (uint8) 0x00;
+    pkt << (uint8) 0x0;
+    pkt << (uint8) 0x2;
 
     ByteBuffer hdr;
     hdr << (uint8) REALM_LIST;
@@ -678,8 +659,8 @@ bool AuthSocket::_HandleRealmList()
 
     SendBuf((char *)hdr.contents(), hdr.size());
 
-    // Set check field before possable relogin to realm
-    _SetVSFields(rI);
+    // Set check field before possable reloagin to realm
+    _SetVSFields(password);
     return true;
 }
 

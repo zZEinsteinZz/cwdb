@@ -20,8 +20,10 @@
 #include "Creature.h"
 #include "Traveller.h"
 #include "MapManager.h"
-#include "ObjectAccessor.h"
-#include "DestinationHolderImp.h"
+#include "RedZoneDistrict.h"
+#include "CellImpl.h"
+#include "GridNotifiersImpl.h"
+#include "DestinationHolder.h"
 
 void
 HomeMovementGenerator::Initialize(Creature & owner)
@@ -61,8 +63,15 @@ HomeMovementGenerator::_reLocate(Creature &owner)           // resend clients th
 
     if (owner.GetTypeId() == TYPEID_UNIT)
     {
+
         sLog.outDebug("HomeMovementGenerator::_reLocate() called, where Unit.GetGUIDLow()=%d", owner.GetGUIDLow());
-        ObjectAccessor::UpdateObjectVisibility(&owner);
+        CellPair p = MaNGOS::ComputeCellPair(owner.GetPositionX(), owner.GetPositionY());
+        Cell cell = RedZone::GetZone(p);
+        cell.data.Part.reserved = ALL_DISTRICT;
+        MaNGOS::CreatureVisibleMovementNotifier notifier(owner);
+        TypeContainerVisitor<MaNGOS::CreatureVisibleMovementNotifier, WorldTypeMapContainer > player_notifier(notifier);
+        CellLock<GridReadGuard> cell_lock(cell, p);
+        cell_lock->Visit(cell_lock, player_notifier, *MapManager::Instance().GetMap(owner.GetMapId(), &owner));
     }
 }
 
@@ -73,11 +82,9 @@ HomeMovementGenerator::Update(Creature &owner, const uint32& time_diff)
     if (time_diff > i_travel_timer)
     {
         _reLocate(owner);
-        owner.setMoveRunFlag(false);
         return false;
     }
-
-    i_travel_timer -= time_diff;
+    else i_travel_timer -= time_diff;
 
     return true;
 

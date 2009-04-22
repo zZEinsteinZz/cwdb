@@ -15,9 +15,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
-#ifndef MANGOSSERVER_PROGRESSBAR_H
-#define MANGOSSERVER_PROGRESSBAR_H   
-
 #include <stdio.h>
 
 class barGoLink
@@ -36,4 +33,3 @@ class barGoLink
         barGoLink( int );
         ~barGoLink();
 };
-#endif

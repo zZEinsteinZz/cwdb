@@ -46,11 +46,13 @@ enum ChatMsg
     CHAT_MSG_SAY                                  = 0x00,
     CHAT_MSG_PARTY                                = 0x01,
     CHAT_MSG_RAID                                 = 0x02,
+    CHAT_MSG_RAID_LEADER                          = 0x57,
+    CHAT_MSG_RAID_WARN                            = 0x58,
     CHAT_MSG_GUILD                                = 0x03,
     CHAT_MSG_OFFICER                              = 0x04,
     CHAT_MSG_YELL                                 = 0x05,
-    CHAT_MSG_WHISPER                              = 0x06,   // whisper received
-    CHAT_MSG_WHISPER_INFORM                       = 0x07,   // whisper sent
+    CHAT_MSG_WHISPER                              = 0x06,
+    CHAT_MSG_WHISPER_INFORM                       = 0x07,
     CHAT_MSG_EMOTE                                = 0x08,
     CHAT_MSG_TEXT_EMOTE                           = 0x09,
     CHAT_MSG_SYSTEM                               = 0x0A,
@@ -68,20 +70,6 @@ enum ChatMsg
     CHAT_MSG_IGNORED                              = 0x16,
     CHAT_MSG_SKILL                                = 0x17,
     CHAT_MSG_LOOT                                 = 0x18,
-    CHAT_MSG_UNK1                                 = 0x19,   // unk
-    CHAT_MSG_MONSTER_WHISPER                      = 0x1A,
-    CHAT_MSG_BATTLEGROUND                         = 0x52,
-    CHAT_MSG_BATTLEGROUND_HORDE                   = 0x53,
-    CHAT_MSG_BATTLEGROUND_ALLIANCE                = 0x54,
-    CHAT_MSG_UNK2                                 = 0x55,   // unk, blue
-    CHAT_MSG_UNK3                                 = 0x56,   // unk, yellow
-    CHAT_MSG_RAID_LEADER                          = 0x57,
-    CHAT_MSG_RAID_WARN                            = 0x58,
-    CHAT_MSG_UNK4                                 = 0x59,
-    CHAT_MSG_UNK5                                 = 0x5A,   // unk
-    CHAT_MSG_UNK6                                 = 0x5B,   // unk
-    CHAT_MSG_BATTLEGROUND_CHAT                    = 0x5C,
-    CHAT_MSG_BATTLEGROUND_LEADER                  = 0x5D,
 };
 
 class ChatCommand
@@ -141,21 +129,13 @@ class ChatHandler
         bool HandleGonameCommand(const char* args);
         bool HandleRecallCommand(const char* args);
         bool HandleAnnounceCommand(const char* args);
-        bool HandleNotifyCommand(const char* args);
         bool HandleGMOnCommand(const char* args);
         bool HandleGMOffCommand(const char* args);
         bool HandleVisibleCommand(const char* args);
         bool HandleGPSCommand(const char* args);
         bool HandleTaxiCheatCommand(const char* args);
         bool HandleWhispersCommand(const char* args);
-        bool HandleSayCommand(const char* args);
-        bool HandleYellCommand(const char* args);
-        bool HandleEmoteCommand(const char* args);
-        bool HandleWhisperCommand(const char* args);
-        bool HandleSendMailCommand(const char* args);
-        bool HandleNameTeleCommand(const char* args);
 
-        bool HandleModifyKnownTitlesCommand(const char* args);
         bool HandleModifyHPCommand(const char* args);
         bool HandleModifyManaCommand(const char* args);
         bool HandleModifyRageCommand(const char* args);
@@ -164,7 +144,6 @@ class ChatHandler
         bool HandleModifyASpeedCommand(const char* args);
         bool HandleModifySpeedCommand(const char* args);
         bool HandleModifyBWalkCommand(const char* args);
-        bool HandleModifyFlyCommand(const char* args);
         bool HandleModifySwimCommand(const char* args);
         bool HandleModifyScaleCommand(const char* args);
         bool HandleModifyMountCommand(const char* args);
@@ -206,17 +185,14 @@ class ChatHandler
         bool HandleGoObjectCommand(const char* args);
         bool HandleTargetObjectCommand(const char* args);
         bool HandleDelObjectCommand(const char* args);
-        bool HandleMoveCreatureCommand(const char* args);
-        bool HandleMoveObjectCommand(const char* args);
         bool HandleTurnObjectCommand(const char* args);
+        bool HandleMoveObjectCommand(const char* args);
         bool HandlePInfoCommand(const char* args);
-        bool HandleMuteCommand(const char* args);
-        bool HandleUnmuteCommand(const char* args);
 
-        bool HandleBanCommand(const char* args);
-        bool HandleUnBanCommand(const char* args);
-        bool HandleBanInfoCommand(const char* args);
-        bool HandleBanListCommand(const char* args);
+        bool HandleBanIPCommand(const char* args);
+        bool HandleBanAccountCommand(const char* args);
+        bool HandleUnBanIPCommand(const char* args);
+        bool HandleUnBanAccountCommand(const char* args);
         bool HandleIdleShutDownCommand(const char* args);
         bool HandleShutDownCommand(const char* args);
         bool HandleSecurityCommand(const char* args);
@@ -243,7 +219,7 @@ class ChatHandler
         bool HandleNearGraveCommand(const char* args);
         bool HandleSpawnTransportCommand(const char* args);
         bool HandleExploreCheatCommand(const char* args);
-        bool HandleEmote2Command(const char* args);
+        bool HandleEmoteCommand(const char* args);
         bool HandleNpcInfoCommand(const char* args);
         bool HandleNpcInfoSetCommand(const char* args);
         bool HandleHoverCommand(const char* args);
@@ -281,26 +257,14 @@ class ChatHandler
         bool HandlePasswordCommand(const char* args);
         bool HandleLockAccountCommand(const char* args);
         bool HandleRespawnCommand(const char* args);
-        bool HandleWpAddCommand(const char* args);
-        bool HandleWpModifyCommand(const char* args);
-        bool HandleWpShowCommand(const char* args);
-        bool HandleFlyModeCommand(const char* args);
-        bool HandleSendOpcodeCommand(const char* args);
-        bool HandleSellErrorCommand(const char* args);
-        bool HandleBuyErrorCommand(const char* args);
-        bool HandleUpdateWorldStateCommand(const char* args);
-        bool HandlePlaySound2Command(const char* args);
-        bool HandleSendChannelNotifyCommand(const char* args);
-        bool HandleSendChatMsgCommand(const char* args);
-        bool HandleRenameCommand(const char * args);
-        bool HandleLoadPDumpCommand(const char *args);
-        bool HandleWritePDumpCommand(const char *args);
-
         //! Development Commands
         bool HandleSetValue(const char* args);
         bool HandleGetValue(const char* args);
         bool HandleSet32Bit(const char* args);
         bool HandleMod32Value(const char* args);
+        bool HandleSendMailNotice(const char* args);
+        bool HandleQueryNextMailTime(const char * args);
+        bool HandleOutOfRange(const char * args);
         bool HandleAddQuest(const char * args);
         bool HandleRemoveQuest(const char * args);
         bool HandleSaveAllCommand(const char* args);
@@ -309,7 +273,6 @@ class ChatHandler
         Player*   getSelectedPlayer();
         Creature* getSelectedCreature();
         Unit*     getSelectedUnit();
-        char*     extractKeyFromLink(char* text, char const* linkType);
 
         WorldSession *m_session;
 

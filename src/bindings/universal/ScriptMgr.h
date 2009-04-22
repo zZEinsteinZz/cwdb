@@ -35,7 +35,7 @@ struct Script
     pGossipHello(NULL), pQuestAccept(NULL), pGossipSelect(NULL), pGossipSelectWithCode(NULL),
         pQuestSelect(NULL), pQuestComplete(NULL), pNPCDialogStatus(NULL), pChooseReward(NULL),
         pItemHello(NULL), pGOHello(NULL), pAreaTrigger(NULL), pItemQuestAccept(NULL), pGOQuestAccept(NULL),
-        pGOChooseReward(NULL), pReceiveEmote(NULL), pItemUse(NULL), GetAI(NULL)
+        pGOChooseReward(NULL), pReceiveEmote(NULL), GetAI(NULL)
         {}
 
     std::string Name;
@@ -56,7 +56,6 @@ struct Script
     bool (*pGOQuestAccept       )(Player *player, GameObject *_GO, Quest *_Quest );
     bool (*pGOChooseReward      )(Player *player, GameObject *_GO, Quest *_Quest, uint32 opt );
     bool (*pReceiveEmote        )(Player *player, Creature *_Creature, uint32 emote );
-    bool (*pItemUse             )(Player *player, Item* _Item);
 
     CreatureAI* (*GetAI)(Creature *_Creature);
     // -----------------------------------------
@@ -79,19 +78,16 @@ struct MANGOS_DLL_DECL ScriptedAI : public CreatureAI
     // Called at each attack of m_creature by any victim
     void AttackStart(Unit *) {}
 
-    // Called at stopping attack by any attacker
+    // Called at stoping attack by any attacker
     void EnterEvadeMode();
 
-    // Called at any heal cast/item used (call non implemented)
+    // Called at any heal cast/item used (call non implemented in mangos)
     void HealBy(Unit *healer, uint32 amount_healed) {}
 
-    // Called at any Damage to any victim (before damage apply)
-    void DamageDeal(Unit *done_to, uint32 &damage) {}
-    
-    // Called at any Damage from any attacker (before damage apply)
-    void DamageTaken(Unit *done_by, uint32 &damage) {}
+    // Called at any Damage from any attacker
+    void DamageInflict(Unit *healer, uint32 amount_healed) {}
 
-    // Is unit visible for MoveInLineOfSight
+    // Is unit visibale for MoveInLineOfSight
     bool IsVisible(Unit *who) const
     {
         return !who->HasStealthAura() && m_creature->GetDistanceSq(who) <= VISIBLE_RANGE;
@@ -105,9 +101,6 @@ struct MANGOS_DLL_DECL ScriptedAI : public CreatureAI
 
     // Called when the creature kills a unit
     void KilledUnit(Unit *){}
-
-    // Called when hit by a spell
-    void SpellHit(Unit *, const SpellEntry*){}
 
     Creature* m_creature;
 
@@ -135,7 +128,7 @@ struct MANGOS_DLL_DECL ScriptedAI : public CreatureAI
 
     void DoSay(char const* text, uint32 language)
     {
-        m_creature->Say(text,language,0);
+        m_creature->Say(text,language);
     }
 
     void DoGoHome();

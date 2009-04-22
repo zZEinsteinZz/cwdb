@@ -25,7 +25,7 @@
 
 class WorldSession;
 
-#define GOSSIP_MAX_MENU_ITEMS 64                            // client supported items unknown, but provided number must be enough
+#define GOSSIP_MAX_MENU_ITEMS 16
 #define DEFAULT_GOSSIP_MESSAGE              0xffffff
 
 //POI defines
@@ -78,20 +78,16 @@ struct GossipMenuItem
 {
     uint8       m_gIcon;
     bool        m_gCoded;
-    std::string m_gMessage;
-    uint32      m_gSender;
-    uint32      m_gAction;
+    char*       m_gMessage;
+    uint32  m_gSender;
+    uint32  m_gAction;
 };
-
-typedef std::vector<GossipMenuItem> GossipMenuItemList;
 
 struct QuestMenuItem
 {
     uint32      m_qId;
     uint8       m_qIcon;
 };
-
-typedef std::vector<QuestMenuItem> QuestMenuItemList;
 
 class MANGOS_DLL_SPEC GossipMenu
 {
@@ -104,7 +100,7 @@ class MANGOS_DLL_SPEC GossipMenu
 
         unsigned int MenuItemCount()
         {
-            return m_gItems.size();
+            return m_gItemsCount;
         }
 
         GossipMenuItem GetItem( unsigned int Id )
@@ -118,7 +114,8 @@ class MANGOS_DLL_SPEC GossipMenu
         void ClearMenu();
 
     protected:
-        GossipMenuItemList m_gItems;
+        unsigned int m_gItemsCount;
+        GossipMenuItem m_gItems[GOSSIP_MAX_MENU_ITEMS];
 };
 
 class QuestMenu
@@ -132,7 +129,7 @@ class QuestMenu
 
         uint8 MenuItemCount()
         {
-            return m_qItems.size();
+            return m_qItemsCount;
         }
         bool HasItem( uint32 questid );
 
@@ -142,7 +139,8 @@ class QuestMenu
         }
 
     protected:
-        QuestMenuItemList m_qItems;
+        int m_qItemsCount;
+        QuestMenuItem m_qItems[GOSSIP_MAX_MENU_ITEMS];
 };
 
 class MANGOS_DLL_SPEC PlayerMenu

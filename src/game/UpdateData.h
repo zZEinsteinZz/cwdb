@@ -23,23 +23,16 @@ class WorldPacket;
 
 enum OBJECT_UPDATE_TYPE
 {
-    UPDATETYPE_VALUES               = 0,
-    UPDATETYPE_MOVEMENT             = 1,
-    UPDATETYPE_CREATE_OBJECT        = 2,
-    UPDATETYPE_CREATE_OBJECT2       = 3,
-    UPDATETYPE_OUT_OF_RANGE_OBJECTS = 4,
-    UPDATETYPE_NEAR_OBJECTS         = 5
-};
+    UPDATETYPE_VALUES = 0,
 
-enum OBJECT_UPDATE_FLAGS
-{
-    UPDATEFLAG_SELF         = 0x01,
-    UPDATEFLAG_TRANSPORT    = 0x02,
-    UPDATEFLAG_FULLGUID     = 0x04,
-    UPDATEFLAG_HIGHGUID     = 0x08,
-    UPDATEFLAG_ALL          = 0x10,
-    UPDATEFLAG_LIVING       = 0x20,
-    UPDATEFLAG_HASPOSITION  = 0x40
+    UPDATETYPE_MOVEMENT = 1,
+
+    UPDATETYPE_CREATE_OBJECT = 2,
+
+    UPDATETYPE_CREATE_OBJECT2 = 3,
+    UPDATETYPE_OUT_OF_RANGE_OBJECTS = 4,
+    UPDATETYPE_NEAR_OBJECTS = 5
+
 };
 
 class UpdateData
@@ -47,14 +40,11 @@ class UpdateData
     public:
         UpdateData();
 
-        void AddOutOfRangeGUID(std::set<uint64>& guids);
         void AddOutOfRangeGUID(const uint64 &guid);
         void AddUpdateBlock(const ByteBuffer &block);
         bool BuildPacket(WorldPacket *packet);
         bool HasData() { return m_blockCount > 0 || m_outOfRangeGUIDs.size() > 0; }
         void Clear();
-
-        std::set<uint64> const& GetOutOfRangeGUIDs() const { return m_outOfRangeGUIDs; }
 
     protected:
         uint32 m_blockCount;

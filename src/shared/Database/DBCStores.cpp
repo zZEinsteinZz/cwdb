@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright (C) 2005,2006,2007 MaNGOS <http://www.mangosproject.org/>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -34,26 +34,19 @@ static AreaFlagByAreaID sAreaFlagByAreaID;
 static AreaFlagByMapID  sAreaFlagByMapID;                   // for instances without generated *.map files
 
 DBCStorage <BankBagSlotPricesEntry> sBankBagSlotPricesStore(BankBagSlotPricesEntryfmt);
-DBCStorage <BattlemasterListEntry> sBattlemasterListStore(BattlemasterListEntryfmt);
-DBCStorage <ChatChannelsEntry> sChatChannelsStore(ChatChannelsEntryfmt);
+
 DBCStorage <ChrClassesEntry> sChrClassesStore(ChrClassesEntryfmt);
 DBCStorage <ChrRacesEntry> sChrRacesStore(ChrRacesEntryfmt);
 DBCStorage <CreatureFamilyEntry> sCreatureFamilyStore(CreatureFamilyfmt);
-
-DBCStorage <DurabilityQualityEntry> sDurabilityQualityStore(DurabilityQualityfmt);
-DBCStorage <DurabilityCostsEntry> sDurabilityCostsStore(DurabilityCostsfmt);
 
 DBCStorage <EmotesTextEntry> sEmotesTextStore(EmoteEntryfmt);
 
 DBCStorage <FactionEntry> sFactionStore(FactionEntryfmt);
 DBCStorage <FactionTemplateEntry> sFactionTemplateStore(FactionTemplateEntryfmt);
 
-DBCStorage <GemPropertiesEntry> sGemPropertiesStore(GemPropertiesEntryfmt);
 DBCStorage <ItemSetEntry> sItemSetStore(ItemSetEntryfmt);
-//DBCStorage <ItemDisplayInfoEntry> sItemDisplayInfoStore(ItemDisplayTemplateEntryfmt); -- not used currently
-DBCStorage <ItemExtendedCostEntry> sItemExtendedCostStore(ItemExtendedCostEntryfmt);
+DBCStorage <ItemDisplayInfoEntry> sItemDisplayInfoStore(ItemDisplayTemplateEntryfmt);
 DBCStorage <ItemRandomPropertiesEntry> sItemRandomPropertiesStore(ItemRandomPropertiesfmt);
-DBCStorage <ItemRandomSuffixEntry> sItemRandomSuffixStore(ItemRandomSuffixfmt);
 
 DBCStorage <LockEntry> sLockStore(LockEntryfmt);
 
@@ -63,7 +56,6 @@ DBCStorage <SkillLineEntry> sSkillLineStore(SkillLinefmt);
 DBCStorage <SkillLineAbilityEntry> sSkillLineAbilityStore(SkillLineAbilityfmt);
 
 DBCStorage <SpellItemEnchantmentEntry> sSpellItemEnchantmentStore(SpellItemEnchantmentfmt);
-DBCStorage <SpellItemEnchantmentConditionEntry> sSpellItemEnchantmentConditionStore(SpellItemEnchantmentConditionfmt);
 DBCStorage <SpellEntry> sSpellStore(SpellEntryfmt);
 SpellCategoryStore sSpellCategoryStore;
 
@@ -135,9 +127,8 @@ inline void LoadDBC(barGoLink& bar, StoreProblemList& errlist, DBCStorage<T>& st
             snprintf(buf,100," (exist, but have %d fields instead %d) Wrong client version DBC file?",storage.fieldCount,strlen(storage.fmt));
             errlist.push_back(filename + buf);
             fclose(f);
-        }
-        else
-            errlist.push_back(filename);
+        }else
+        errlist.push_back(filename);
     }
 }
 
@@ -145,7 +136,7 @@ void LoadDBCStores(std::string dataPath)
 {
     std::string tmpPath="";
 
-    const uint32 DBCFilesCount = 35;
+    const uint32 DBCFilesCount = 28;
 
     barGoLink bar( DBCFilesCount );
 
@@ -153,27 +144,20 @@ void LoadDBCStores(std::string dataPath)
 
     LoadDBC(bar,bad_dbc_files,sAreaStore,                dataPath+"dbc/AreaTable.dbc");
     LoadDBC(bar,bad_dbc_files,sBankBagSlotPricesStore,   dataPath+"dbc/BankBagSlotPrices.dbc");
-    LoadDBC(bar,bad_dbc_files,sBattlemasterListStore,    dataPath+"dbc/BattlemasterList.dbc");
-    LoadDBC(bar,bad_dbc_files,sChatChannelsStore,        dataPath+"dbc/ChatChannels.dbc");
     LoadDBC(bar,bad_dbc_files,sChrClassesStore,          dataPath+"dbc/ChrClasses.dbc");
     LoadDBC(bar,bad_dbc_files,sChrRacesStore,            dataPath+"dbc/ChrRaces.dbc");
     LoadDBC(bar,bad_dbc_files,sCreatureFamilyStore,      dataPath+"dbc/CreatureFamily.dbc");
-    LoadDBC(bar,bad_dbc_files,sDurabilityCostsStore,     dataPath+"dbc/DurabilityCosts.dbc");
-    LoadDBC(bar,bad_dbc_files,sDurabilityQualityStore,   dataPath+"dbc/DurabilityQuality.dbc");
     LoadDBC(bar,bad_dbc_files,sEmotesTextStore,          dataPath+"dbc/EmotesText.dbc");
     LoadDBC(bar,bad_dbc_files,sFactionStore,             dataPath+"dbc/Faction.dbc");
     LoadDBC(bar,bad_dbc_files,sFactionTemplateStore,     dataPath+"dbc/FactionTemplate.dbc");
-    LoadDBC(bar,bad_dbc_files,sGemPropertiesStore,       dataPath+"dbc/GemProperties.dbc");
-//    LoadDBC(bar,bad_dbc_files,sItemDisplayInfoStore,     dataPath+"dbc/ItemDisplayInfo.dbc"); -- not used currently
-    LoadDBC(bar,bad_dbc_files,sItemExtendedCostStore,    dataPath+"dbc/ItemExtendedCost.dbc");
+    LoadDBC(bar,bad_dbc_files,sItemDisplayInfoStore,     dataPath+"dbc/ItemDisplayInfo.dbc");
     LoadDBC(bar,bad_dbc_files,sItemRandomPropertiesStore,dataPath+"dbc/ItemRandomProperties.dbc");
-    LoadDBC(bar,bad_dbc_files,sItemRandomSuffixStore,    dataPath+"dbc/ItemRandomSuffix.dbc");
     LoadDBC(bar,bad_dbc_files,sItemSetStore,             dataPath+"dbc/ItemSet.dbc");
     LoadDBC(bar,bad_dbc_files,sLockStore,                dataPath+"dbc/Lock.dbc");
     LoadDBC(bar,bad_dbc_files,sMapStore,                 dataPath+"dbc/Map.dbc");
 
     // must be after sAreaStore and sMapStore loading
-    for(uint32 i = 1; i < sAreaStore.nCount; ++i)
+    for(uint32 i = 1; i <= sAreaStore.nCount; ++i)
     {
         if(AreaTableEntry const* area = sAreaStore.LookupEntry(i))
         {
@@ -206,7 +190,6 @@ void LoadDBCStores(std::string dataPath)
     LoadDBC(bar,bad_dbc_files,sSpellDurationStore,       dataPath+"dbc/SpellDuration.dbc");
     //LoadDBC(bar,bad_dbc_files,sSpellFocusObjectStore,    dataPath+"dbc/SpellFocusObject.dbc");
     LoadDBC(bar,bad_dbc_files,sSpellItemEnchantmentStore,dataPath+"dbc/SpellItemEnchantment.dbc");
-    LoadDBC(bar,bad_dbc_files,sSpellItemEnchantmentConditionStore,dataPath+"dbc/SpellItemEnchantmentCondition.dbc");
     LoadDBC(bar,bad_dbc_files,sSpellRadiusStore,         dataPath+"dbc/SpellRadius.dbc");
     LoadDBC(bar,bad_dbc_files,sSpellRangeStore,          dataPath+"dbc/SpellRange.dbc");
     LoadDBC(bar,bad_dbc_files,sStableSlotPricesStore,    dataPath+"dbc/StableSlotPrices.dbc");
@@ -227,7 +210,7 @@ void LoadDBCStores(std::string dataPath)
 
     // Initialize global taxinodes mask
     memset(sTaxiNodesMask,0,sizeof(sTaxiNodesMask));
-    for(uint32 i = 1; i < sTaxiNodesStore.nCount; ++i)
+    for(uint32 i = 1; i <= sTaxiNodesStore.nCount; ++i)
     {
         if(TaxiNodesEntry const* entry = sTaxiNodesStore.LookupEntry(i))
         {
@@ -239,7 +222,7 @@ void LoadDBCStores(std::string dataPath)
 
     //## TaxiPath.dbc ## Loaded only for initialization different structures
     LoadDBC(bar,bad_dbc_files,sTaxiPathStore,            dataPath+"dbc/TaxiPath.dbc");
-    for(uint32 i = 1; i < sTaxiPathStore.nCount; ++i)
+    for(uint32 i = 1; i <= sTaxiPathStore.nCount; ++i)
         if(TaxiPathEntry const* entry = sTaxiPathStore.LookupEntry(i))
             sTaxiPathSetBySource[entry->from][entry->to] = TaxiPathBySourceAndDestination(entry->ID,entry->price);
     uint32 pathCount = sTaxiPathStore.nCount;
@@ -249,16 +232,16 @@ void LoadDBCStores(std::string dataPath)
     LoadDBC(bar,bad_dbc_files,sTaxiPathNodeStore,        dataPath+"dbc/TaxiPathNode.dbc");
     // Calculate path nodes count
     std::vector<uint32> pathLength;
-    pathLength.resize(pathCount);                           // 0 and some other indexes not used
-    for(uint32 i = 1; i < sTaxiPathNodeStore.nCount; ++i)
+    pathLength.resize(pathCount+1);                         // 0 and some other indexes not used
+    for(uint32 i = 1; i <= sTaxiPathNodeStore.nCount; ++i)
         if(TaxiPathNodeEntry const* entry = sTaxiPathNodeStore.LookupEntry(i))
             ++pathLength[entry->path];
     // Set path length
-    sTaxiPathNodesByPath.resize(pathCount);                 // 0 and some other indexes not used
+    sTaxiPathNodesByPath.resize(pathCount+1);               // 0 and some other indexes not used
     for(uint32 i = 1; i < sTaxiPathNodesByPath.size(); ++i)
         sTaxiPathNodesByPath[i].resize(pathLength[i]);
     // fill data
-    for(uint32 i = 1; i < sTaxiPathNodeStore.nCount; ++i)
+    for(uint32 i = 1; i <= sTaxiPathNodeStore.nCount; ++i)
         if(TaxiPathNodeEntry const* entry = sTaxiPathNodeStore.LookupEntry(i))
             sTaxiPathNodesByPath[entry->path][entry->index] = TaxiPathNode(entry->mapid,entry->x,entry->y,entry->z,entry->actionFlag,entry->delay);
     sTaxiPathNodeStore.Clear();
@@ -346,14 +329,14 @@ int32 GetMaxDuration(SpellEntry const *spellInfo)
     return (du->Duration[2] == -1) ? -1 : abs(du->Duration[2]);
 }
 
-char* GetPetName(uint32 petfamily, uint32 dbclang)
+char* GetPetName(uint32 petfamily)
 {
     if(!petfamily)
         return NULL;
     CreatureFamilyEntry const *pet_family = sCreatureFamilyStore.LookupEntry(petfamily);
     if(!pet_family)
         return NULL;
-    return pet_family->Name[dbclang]?pet_family->Name[dbclang]:NULL;
+    return pet_family->Name?pet_family->Name:NULL;
 }
 
 bool IsPassiveSpell(uint32 spellId)
@@ -401,17 +384,6 @@ int32 CompareAuraRanks(uint32 spellId_1, uint32 effIndex_1, uint32 spellId_2, ui
     else return diff;
 }
 
-bool IsSealSpell(uint32 spellId)
-{
-    SpellEntry const *spellInfo = sSpellStore.LookupEntry(spellId);
-
-    // SpellID 25780 is Righteous Fury, NOT seal !
-    return spellId != 25780 && spellInfo && (
-        spellInfo->SpellVisual ==  298 || spellInfo->SpellVisual == 7975 || spellInfo->SpellVisual == 7978 ||
-        spellInfo->SpellVisual == 7986 || spellInfo->SpellVisual == 7987 || spellInfo->SpellVisual == 7992 ||
-        spellInfo->SpellVisual == 8062 || spellInfo->SpellVisual == 8072 || spellInfo->SpellVisual == 8073 );
-}
-
 SpellSpecific GetSpellSpecific(uint32 spellId)
 {
     SpellEntry const *spellInfo = sSpellStore.LookupEntry(spellId);
@@ -419,45 +391,27 @@ SpellSpecific GetSpellSpecific(uint32 spellId)
 
     if(spellInfo->SpellFamilyName == SPELLFAMILY_PALADIN)
     {
-        if (IsSealSpell(spellId))
+        // only paladin seals have this
+        if (spellInfo->SpellVisual == 5622)
             return SPELL_SEAL;
-
-        if (spellInfo->SpellFamilyFlags & 0x10000000)
-            return SPELL_BLESSING;
 
         for (int i = 0; i < 3; i++)
         {
             // only paladin auras have this
             if (spellInfo->Effect[i] == 35)                 //SPELL_EFFECT_APPLY_AREA_AURA
                 return SPELL_AURA;
+            // only paladin blessings / greater blessings have this
+            if (spellInfo->EffectImplicitTargetA[i] == 21   //TARGET_S_F
+                ||spellInfo->EffectImplicitTargetA[i] == 57 //TARGET_S_F_2
+                ||spellInfo->EffectImplicitTargetA[i] == 61)//TARGET_AF_PC
+                return SPELL_BLESSING;
         }
     }
 
+    // only warlock curses have this
     if(spellInfo->SpellFamilyName == SPELLFAMILY_WARLOCK)
-    {
-        // only warlock curses have this
         if (spellInfo->Dispel == 2)                         //IMMUNE_DISPEL_CURSE
             return SPELL_CURSE;
-
-        // family flag 37
-        if (spellInfo->SpellFamilyFlags & 0x2000000000LL)
-            return SPELL_WARLOCK_ARMOR;
-    }
-
-    if(spellInfo->SpellFamilyName == SPELLFAMILY_MAGE)
-    {
-        // family flags 18(Molten), 25(Frost/Ice), 28(Mage)
-        if (spellInfo->SpellFamilyFlags & 0x12040000)
-            return SPELL_MAGE_ARMOR;
-    }
-
-    if(spellInfo->SpellFamilyName == SPELLFAMILY_SHAMAN)
-    {
-        // family flags 10 (Lightning), 42 (Earth)
-        // todo: add Water (has no SpellFamilyName/SpellFamilyFlag)
-        if (spellInfo->SpellFamilyFlags & 0x40000000400LL)
-            return SPELL_ELEMENTAL_SHIELD;
-    }
 
     if(spellInfo->SpellFamilyName == SPELLFAMILY_HUNTER)
     {
@@ -471,9 +425,9 @@ SpellSpecific GetSpellSpecific(uint32 spellId)
 
     for(int i = 0; i < 3; i++)
         if(spellInfo->Effect[i] == 6                        //SPELL_EFFECT_APPLY_AURA
-        && (spellInfo->EffectApplyAuraName[i] == 44         //SPELL_AURA_TRACK_CREATURES
-        || spellInfo->EffectApplyAuraName[i] == 45          //SPELL_AURA_TRACK_RESOURCES
-        || spellInfo->EffectApplyAuraName[i] == 151))       //SPELL_AURA_TRACK_STEALTHED
+        && (spellInfo->EffectApplyAuraName[i] == 44     //SPELL_AURA_TRACK_CREATURES
+        || spellInfo->EffectApplyAuraName[i] == 45      //SPELL_AURA_TRACK_RESOURCES
+        || spellInfo->EffectApplyAuraName[i] == 151))   //SPELL_AURA_TRACK_STEALTHED
             return SPELL_TRACKER;
 
     return SPELL_NORMAL;
@@ -490,9 +444,6 @@ bool IsSpellSingleEffectPerCaster(uint32 spellId)
         case SPELL_CURSE:
         case SPELL_ASPECT:
         case SPELL_TRACKER:
-        case SPELL_WARLOCK_ARMOR:
-        case SPELL_MAGE_ARMOR:
-        case SPELL_ELEMENTAL_SHIELD:
             return true;
         default:
             return false;
@@ -550,29 +501,21 @@ bool IsPositiveEffect(uint32 spellId, uint32 effIndex)
             }   break;
             case 26 /*SPELL_AURA_MOD_ROOT          */:
             case 27 /*SPELL_AURA_MOD_SILENCE       */:
-            case 95 /*SPELL_AURA_GHOST*/:
+            case 33 /*SPELL_AURA_MOD_DECREASE_SPEED*/:
                 return false;
-            case 33 /*SPELL_AURA_MOD_DECREASE_SPEED*/:      // used in positive spells also
-                // part of positive spell if casted at self
-                if(spellproto->EffectImplicitTargetA[effIndex] != 1/*TARGET_SELF*/)
-                    return false;
-                break;
             case 42 /*SPELL_AURA_PROC_TRIGGER_SPELL*/:
                 if(spellId != spellproto->EffectTriggerSpell[effIndex])
                 {
                     uint32 spellTriggeredId = spellproto->EffectTriggerSpell[effIndex];
                     SpellEntry const *spellTriggeredProto = sSpellStore.LookupEntry(spellTriggeredId);
 
-                    if(spellTriggeredProto)
+                    // non-positive targets of main spell return early
+                    for(int i = 0; i < 3; ++i)
                     {
-                        // non-positive targets of main spell return early
-                        for(int i = 0; i < 3; ++i)
-                        {
-                            // if non-positive trigger cast targeted to positive target this main cast is non-positive
-                            // this will place this spell auras as debuffs
-                            if(IsPositiveTarget(spellTriggeredProto->EffectImplicitTargetA[effIndex]) && !IsPositiveEffect(spellTriggeredId,i))
-                                return false;
-                        }
+                        // if non-positive trigger cast targeted to positive target this main cast is non-positive
+                        // this will place this spell auras as debuffs
+                        if(IsPositiveTarget(spellTriggeredProto->EffectImplicitTargetA[effIndex]) && !IsPositiveEffect(spellTriggeredId,i))
+                            return false;
                     }
                 }
                 break;
@@ -581,10 +524,9 @@ bool IsPositiveEffect(uint32 spellId, uint32 effIndex)
                 // non-positive immunities
                 switch(spellproto->EffectMiscValue[effIndex])
                 {
-                    case 16 /*MECHANIC_HEAL           */:
-                    case 19 /*MECHANIC_SHIELDED       */:
-                    case 21 /*MECHANIC_MOUNT          */:
-                    case 25 /*MECHANIC_INVULNERABILITY*/:
+                    case 16 /*MECHANIC_HEAL    */:
+                    case 19 /*MECHANIC_SHIELDED*/:
+                    case 21 /*MECHANIC_MOUNT   */:
                         return false;
                     default:
                         break;
@@ -670,18 +612,6 @@ bool CanUsedWhileStealthed(uint32 spellId)
     if ( (spellInfo->AttributesEx & 32) == 32 || spellInfo->AttributesEx2 == 0x200000)
         return true;
     return false;
-}
-
-ChatChannelsEntry const* GetChannelEntryFor(uint32 channel_id)
-{
-    // not sorted, numbering index from 0
-    for(uint32 i = 0; i < sChatChannelsStore.nCount; ++i)
-    {
-        ChatChannelsEntry const* ch = sChatChannelsStore.LookupEntry(i);
-        if(ch && ch->ChannelID==channel_id)
-            return ch;
-    }
-    return NULL;
 }
 
 // script support functions

@@ -21,11 +21,14 @@
 
 #include "Common.h"
 #include "Errors.h"
-#include "Log.h"
 
 class ByteBuffer
 {
     public:
+        class error
+        {
+        };
+
         const static size_t DEFAULT_SIZE = 0x1000;
 
         // constructor
@@ -284,22 +287,6 @@ class ByteBuffer
             if(buffer.size()) append(buffer.contents(),buffer.size());
         }
 
-        void appendPackGUID(uint64 guid)
-        {
-            size_t mask_position = wpos();
-            *this << uint8(0);
-            for(uint8 i = 0; i < 8; i++)
-            {
-                if(guid & 0xFF)
-                {
-                    _storage[mask_position] |= (1<<i);
-                    *this << ((uint8)(guid & 0xFF));
-                }
-
-                guid >>= 8;
-            }
-        }
-
         void put(size_t pos, const uint8 *src, size_t cnt)
         {
             ASSERT(pos + cnt <= size() || PrintPosError(true,pos,cnt));
@@ -307,44 +294,36 @@ class ByteBuffer
         }
         void print_storage()
         {
-            if(!sLog.IsOutDebug())                           // optimize disabled debug output
-                return;
-
-            sLog.outDebug("STORAGE_SIZE: %u", size() );
+            printf("STORAGE_SIZE: %u\n", size() );
             for(uint32 i = 0; i < size(); i++)
-                sLog.outDebugInLine("%u - ", read<uint8>(i) );
-            sLog.outDebug("");
+                printf("%u - ", read<uint8>(i) );
+            printf("\n");
         }
 
         void textlike()
         {
-            if(!sLog.IsOutDebug())                           // optimize disabled debug output
-                return;
-
-            sLog.outDebug("STORAGE_SIZE: %u", size() );
+            printf("STORAGE_SIZE: %u\n", size() );
             for(uint32 i = 0; i < size(); i++)
-                sLog.outDebugInLine("%c", read<uint8>(i) );
-            sLog.outDebug("");
+                printf("%c", read<uint8>(i) );
+            printf("\n");
         }
 
         void hexlike()
         {
-            if(!sLog.IsOutDebug())                           // optimize disabled debug output
-                return;
 
             uint32 j = 1, k = 1;
-            sLog.outDebug("STORAGE_SIZE: %u", size() );
+            printf("STORAGE_SIZE: %u\n", size() );
             for(uint32 i = 0; i < size(); i++)
             {
                 if ((i == (j*8)) && ((i != (k*16))))
                 {
                     if (read<uint8>(i) < 0x0F)
                     {
-                        sLog.outDebugInLine("| 0%X ", read<uint8>(i) );
+                        printf("| 0%X ", read<uint8>(i) );
                     }
                     else
                     {
-                        sLog.outDebugInLine("| %X ", read<uint8>(i) );
+                        printf("| %X ", read<uint8>(i) );
                     }
                     j++;
                 }
@@ -352,11 +331,11 @@ class ByteBuffer
                 {
                     if (read<uint8>(i) < 0x0F)
                     {
-                        sLog.outDebugInLine("\n0%X ", read<uint8>(i) );
+                        printf("\n0%X ", read<uint8>(i) );
                     }
                     else
                     {
-                        sLog.outDebugInLine("\n%X ", read<uint8>(i) );
+                        printf("\n%X ", read<uint8>(i) );
                     }
 
                     k++;
@@ -366,21 +345,21 @@ class ByteBuffer
                 {
                     if (read<uint8>(i) < 0x0F)
                     {
-                        sLog.outDebugInLine("0%X ", read<uint8>(i) );
+                        printf("0%X ", read<uint8>(i) );
                     }
                     else
                     {
-                        sLog.outDebugInLine("%X ", read<uint8>(i) );
+                        printf("%X ", read<uint8>(i) );
                     }
                 }
             }
-            sLog.outDebug("");
+            printf("\n");
         }
 
     protected:
         bool PrintPosError(bool add, size_t pos, size_t esize) const
         {
-            sLog.outError("ERROR: Attempt %s in ByteBuffer (pos: %u size: %u) value with size: %u",(add ? "put" : "get"),pos, size(), esize);
+            printf("ERROR: Attempt %s in ByteBuffer (pos: %u size: %u) value with size: %u",(add ? "put" : "get"),pos, size(), esize);
 
             // assert must fail after function call
             return false;

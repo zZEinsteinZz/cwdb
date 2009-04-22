@@ -34,14 +34,14 @@
 #include "SystemConfig.h"
 #include "Config/ConfigEnv.h"
 #include "Database/DatabaseEnv.h"
-#include "CliRunnable.h"
-#include "RASocket.h"
-#include "ScriptCalls.h"
 
-#include "Network/TcpSocket.h"
-#include "Network/Utility.h"
-#include "Network/Parse.h"
-#include "Network/Socket.h"
+#ifdef ENABLE_CLI
+#include "CliRunnable.h"
+#endif
+
+#ifdef ENABLE_RA
+#include "RASocket.h"
+#endif
 
 /// \todo Warning disabling not useful under VC++2005. Can somebody say on which compiler it is useful?
 #pragma warning(disable:4305)
@@ -85,7 +85,6 @@ void Master::Run()
     port_t wsport = sWorld.getConfig(CONFIG_PORT_WORLD);
 
     SocketHandler h;
-
     ListenSocket<WorldSocket> worldListenSocket(h);
     if (worldListenSocket.Bind(wsport))
     {
@@ -103,28 +102,24 @@ void Master::Run()
     ZThread::Thread t(new WorldRunnable);
     t.setPriority ((ZThread::Priority )2);
 
-    if (sConfig.GetBoolDefault("Console.Enable", 1))
-    {
-        ///- Launch CliRunnable thread
-        ZThread::Thread td1(new CliRunnable);
-    }
+    #ifdef ENABLE_CLI
+    ///- Launch CliRunnable thread
+    ZThread::Thread td1(new CliRunnable);
+    #endif
 
+    #ifdef ENABLE_RA
     ///- Launch the RA listener socket
+    port_t raport = sConfig.GetIntDefault( "RA.Port", 3443 );
     ListenSocket<RASocket> RAListenSocket(h);
-    if (sConfig.GetBoolDefault("Ra.Enable", 0))
-    {
-        port_t raport = sConfig.GetIntDefault( "Ra.Port", 3443 );
-        std::string stringip = sConfig.GetStringDefault( "Ra.IP", "0.0.0.0" );
-        ipaddr_t raip;
-        if(!Utility::u2ip(stringip, raip))
-            sLog.outError( "MaNGOS RA can not bind to ip %s", stringip.c_str());
-        else if (RAListenSocket.Bind(raip, raport))
-            sLog.outError( "MaNGOS RA can not bind to port %d on %s", raport, stringip.c_str());
-        else
-            h.Add(&RAListenSocket);
 
-        sLog.outString("Starting Remote access listner on port %d on %s", raport, stringip.c_str());
+    if (RAListenSocket.Bind(raport))
+    {
+        sLog.outError( "MaNGOS RA can not bind to port %d", raport );
+        // return; //go on with no RA
     }
+
+    h.Add(&RAListenSocket);
+    #endif
 
     ///- Handle affinity for multiple processors and process priority on Windows
     #ifdef WIN32
@@ -134,12 +129,12 @@ void Master::Run()
         uint32 Aff = sConfig.GetIntDefault("UseProcessors", 0);
         if(Aff > 0)
         {
-            DWORD appAff;
-            DWORD sysAff;
+            uint32 appAff;
+            uint32 sysAff;
 
             if(GetProcessAffinityMask(hProcess,&appAff,&sysAff))
             {
-                DWORD curAff = Aff & appAff;                // remove non accessible processors
+                uint32 curAff = Aff & appAff;               // remove non accessible processors
 
                 if(!curAff )
                 {
@@ -204,58 +199,12 @@ void Master::Run()
     ///- Remove signal handling before leaving
     _UnhookSignals();
 
-    // when the main thread closes the singletons get unloaded
-    // since worldrunnable uses them, it will crash if unloaded after master
     t.wait();
 
     ///- Clean database before leaving
     clearOnlineAccounts();
 
     sLog.outString( "Halting process..." );
-
-    #ifdef WIN32
-    if (sConfig.GetBoolDefault("Console.Enable", 1))
-    {
-        // this only way to terminate CLI thread exist at Win32 (alt. way exist only in Windows Vista API)
-        //_exit(1);
-        // send keyboard input to safely unblock the CLI thread
-        INPUT_RECORD b[5];
-        HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
-        b[0].EventType = KEY_EVENT;
-        b[0].Event.KeyEvent.bKeyDown = TRUE;
-        b[0].Event.KeyEvent.uChar.AsciiChar = 'X';
-        b[0].Event.KeyEvent.wVirtualKeyCode = 'X';
-        b[0].Event.KeyEvent.wRepeatCount = 1;
-
-        b[1].EventType = KEY_EVENT;
-        b[1].Event.KeyEvent.bKeyDown = FALSE;
-        b[1].Event.KeyEvent.uChar.AsciiChar = 'X';
-        b[1].Event.KeyEvent.wVirtualKeyCode = 'X';
-        b[1].Event.KeyEvent.wRepeatCount = 1;
-
-        b[2].EventType = KEY_EVENT;
-        b[2].Event.KeyEvent.bKeyDown = TRUE;
-        b[2].Event.KeyEvent.dwControlKeyState = 0;
-        b[2].Event.KeyEvent.uChar.AsciiChar = '\r';
-        b[2].Event.KeyEvent.wVirtualKeyCode = VK_RETURN;
-        b[2].Event.KeyEvent.wRepeatCount = 1;
-        b[2].Event.KeyEvent.wVirtualScanCode = 0x1c;
-
-        b[3].EventType = KEY_EVENT;
-        b[3].Event.KeyEvent.bKeyDown = FALSE;
-        b[3].Event.KeyEvent.dwControlKeyState = 0;
-        b[3].Event.KeyEvent.uChar.AsciiChar = '\r';
-        b[3].Event.KeyEvent.wVirtualKeyCode = VK_RETURN;
-        b[3].Event.KeyEvent.wVirtualScanCode = 0x1c;
-        b[3].Event.KeyEvent.wRepeatCount = 1;
-        DWORD numb;
-        BOOL ret = WriteConsoleInput(hStdIn, b, 4, &numb);
-    }
-    #endif
-
-    // for some unknown reason, unloading scripts here and not in worldrunnable
-    // fixes a memory leak related to detaching threads from the module
-    UnloadScriptingModule();
 
     return;
 }

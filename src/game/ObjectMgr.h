@@ -32,6 +32,7 @@
 #include "Path.h"
 #include "ItemPrototype.h"
 #include "NPCHandler.h"
+#include "MiscHandler.h"
 #include "Database/DatabaseEnv.h"
 #include "AuctionHouseObject.h"
 #include "Mail.h"
@@ -42,15 +43,14 @@
 #include "Database/SQLStorage.h"
 
 extern SQLStorage sCreatureStorage;
-extern SQLStorage sCreatureDataAddonStorage;
 extern SQLStorage sGOStorage;
 extern SQLStorage sPageTextStore;
 extern SQLStorage sItemStorage;
+extern SQLStorage sSpellProcEventStore;
 extern SQLStorage sSpellThreatStore;
 
 class Group;
 class Guild;
-class ArenaTeam;
 class Path;
 class TransportPath;
 
@@ -70,44 +70,8 @@ struct ScriptInfo
 
 typedef multimap<uint32, ScriptInfo> ScriptMap;
 typedef map<uint32, ScriptMap > ScriptMapMap;
-extern ScriptMapMap sQuestEndScripts;
-extern ScriptMapMap sQuestStartScripts;
+extern ScriptMapMap sScripts;
 extern ScriptMapMap sSpellScripts;
-
-struct AreaTrigger
-{
-    uint8  requiredLevel;
-    uint32 requiredItem;
-    uint32 trigger_mapId;
-    float  trigger_X;
-    float  trigger_Y;
-    float  trigger_Z;
-    uint32 target_mapId;
-    float  target_X;
-    float  target_Y;
-    float  target_Z;
-    float  target_Orientation;
-
-    bool IsTeleport() const { return target_X != 0 || target_Y !=0 || target_Z !=0; }
-};
-
-typedef std::set<uint32> CellGuidSet;
-typedef std::map<uint32/*player guid*/,uint32/*instance*/> CellCorpseSet;
-struct CellObjectGuids
-{
-    CellGuidSet creatures;
-    CellGuidSet gameobjects;
-    CellCorpseSet corpses;
-};
-typedef HM_NAMESPACE::hash_map<uint32/*cell_id*/,CellObjectGuids> CellObjectGuidsMap;
-typedef HM_NAMESPACE::hash_map<uint32/*mapid*/,CellObjectGuidsMap> MapObjectGuids;
-
-typedef HM_NAMESPACE::hash_map<uint64/*(instance,guid) pair*/,time_t> RespawnTimes;
-
-typedef HM_NAMESPACE::hash_map<uint32,CreatureData> CreatureDataMap;
-typedef HM_NAMESPACE::hash_map<uint32,GameObjectData> GameObjectDataMap;
-
-typedef std::multimap<uint32,uint32> QuestRelations;
 
 struct PetLevelInfo
 {
@@ -128,7 +92,6 @@ struct ReputationOnKillEntry
     bool is_teamaward2;
     uint32 reputration_max_cap2;
     int32 repvalue2;
-    bool team_dependent;
 };
 
 #define WEATHER_SEASONS 4
@@ -137,40 +100,10 @@ struct WeatherSeasonChances {
     uint32 snowChance;
     uint32 stormChance;
 };
-
 struct WeatherZoneChances
 {
     WeatherSeasonChances data[WEATHER_SEASONS];
 };
-
-struct SpellAffection
-{
-    uint16 SpellId;
-    uint8 SchoolMask;
-    uint16 Category;
-    uint16 SkillId;
-    uint8 SpellFamily;
-    uint64 SpellFamilyMask;
-    uint16 Charges;
-};
-
-/// Player state
-enum SessionStatus
-{
-    STATUS_AUTHED = 0,                                      ///< Player authenticated
-    STATUS_LOGGEDIN                                         ///< Player in game
-};
-
-struct OpcodeHandler
-{
-    OpcodeHandler() : status(STATUS_AUTHED), handler(NULL) {};
-    OpcodeHandler( SessionStatus _status, void (WorldSession::*_handler)(WorldPacket& recvPacket) ) : status(_status), handler(_handler) {};
-
-    SessionStatus status;
-    void (WorldSession::*handler)(WorldPacket& recvPacket);
-};
-
-typedef HM_NAMESPACE::hash_map< uint16 , OpcodeHandler > OpcodeTableMap;
 
 class ObjectMgr
 {
@@ -182,9 +115,8 @@ class ObjectMgr
 
         typedef std::set< Group * > GroupSet;
         typedef std::set< Guild * > GuildSet;
-        typedef std::set< ArenaTeam * > ArenaTeamSet;
 
-        typedef HM_NAMESPACE::hash_map<uint32, AreaTrigger*> AreaTriggerMap;
+        typedef HM_NAMESPACE::hash_map<uint32, TeleportCoords*> TeleportMap;
 
         typedef HM_NAMESPACE::hash_map<uint32, ReputationOnKillEntry> RepOnKillMap;
 
@@ -243,16 +175,7 @@ class ObjectMgr
         void AddGuild(Guild* guild) { mGuildSet.insert( guild ); }
         void RemoveGuild(Guild* guild) { mGuildSet.erase( guild ); }
 
-        ArenaTeam* GetArenaTeamById(const uint32 ArenaTeamId) const;
-        ArenaTeam* GetArenaTeamByName(std::string ArenaTeamName) const;
-        void AddArenaTeam(ArenaTeam* arenateam) { mArenaTeamSet.insert( arenateam ); }
-        void RemoveArenaTeam(ArenaTeam* arenateam) { mArenaTeamSet.erase( arenateam ); }
-
         CreatureInfo const *GetCreatureTemplate( uint32 id );
-        CreatureDataAddon const *GetCreatureAddon( uint32 lowguid )
-        {
-            return sCreatureDataAddonStorage.LookupEntry<CreatureDataAddon>(lowguid);
-        }
 
         static ItemPrototype const* GetItemPrototype(uint32 id) { return sItemStorage.LookupEntry<ItemPrototype>(id); }
 
@@ -289,7 +212,6 @@ class ObjectMgr
         void SendAuctionExpiredMail( AuctionEntry * auction );
         uint32 GetAuctionCut( uint32 location, uint32 highBid );
         uint32 GetAuctionDeposit(uint32 location, uint32 time, Item *pItem);
-        uint32 GetAuctionOutBid(uint32 currentBid);
 
         PetLevelInfo const* GetPetLevelInfo(uint32 creature_id, uint32 level) const;
 
@@ -298,16 +220,15 @@ class ObjectMgr
             if(race   >= MAX_RACES)   return NULL;
             if(class_ >= MAX_CLASSES) return NULL;
             PlayerInfo const* info = &playerInfo[race][class_];
-            if(info->displayId_m==0 || info->displayId_f==0) return NULL;
+            if(info->displayId==0) return NULL;
             return info;
         }
         void GetPlayerLevelInfo(uint32 race, uint32 class_,uint32 level, PlayerLevelInfo* info) const;
 
-        uint64 GetPlayerGUIDByName(std::string name) const;
+        uint64 GetPlayerGUIDByName(const char *name) const;
         bool GetPlayerNameByGUID(const uint64 &guid, std::string &name) const;
         uint32 GetPlayerTeamByGUID(const uint64 &guid) const;
         uint32 GetPlayerAccountIdByGUID(const uint64 &guid) const;
-        uint32 GetSecurityByAccount(uint32 acc_id) const;
 
         uint32 GetNearestTaxiNode( float x, float y, float z, uint32 mapid );
         void GetTaxiPath( uint32 source, uint32 destination, uint32 &path, uint32 &cost);
@@ -315,43 +236,28 @@ class ObjectMgr
         void GetTaxiPathNodes( uint32 path, Path &pathnodes );
         void GetTransportPathNodes( uint32 path, TransportPath &pathnodes );
 
-        uint32 GetQuestForAreaTrigger(uint32 Trigger_ID) const
-        {
-            QuestAreaTriggerMap::const_iterator itr = mQuestAreaTriggerMap.find(Trigger_ID);
-            if(itr != mQuestAreaTriggerMap.end())
-                return itr->second;
-            return 0;
-        }
-        bool IsTavernAreaTrigger(uint32 Trigger_ID) const { return mTavernAreaTriggerSet.count(Trigger_ID) != 0; }
+        void AddAreaTriggerPoint(AreaTriggerPoint *pArea);
+        AreaTriggerPoint *GetAreaTriggerQuestPoint(uint32 Trigger_ID);
 
         void AddGossipText(GossipText *pGText);
         GossipText *GetGossipText(uint32 Text_ID);
 
         WorldSafeLocsEntry const *GetClosestGraveYard(float x, float y, float z, uint32 MapId, uint32 team);
 
-        AreaTrigger const* GetAreaTrigger(uint32 trigger) const
+        void AddTeleportCoords(TeleportCoords* TC)
         {
-            AreaTriggerMap::const_iterator itr = mAreaTriggers.find( trigger );
-            if( itr != mAreaTriggers.end( ) )
+            ASSERT( TC );
+            mTeleports[TC->id] = TC;
+        }
+        TeleportCoords const* GetTeleportCoords(uint32 id) const
+        {
+            TeleportMap::const_iterator itr = mTeleports.find( id );
+            if( itr != mTeleports.end( ) )
                 return itr->second;
             return NULL;
         }
 
-        SpellAffection const* GetSpellAffection(uint16 spellId, uint8 effectId) const
-        {
-            SpellAffectMap::const_iterator itr = mSpellAffectMap.find((spellId<<8) + effectId);
-            if( itr != mSpellAffectMap.end( ) )
-                return &itr->second;
-            return NULL;
-        }
-
-        SpellProcEventEntry const* GetSpellProcEvent(uint32 spellId) const
-        {
-            SpellProcEventMap::const_iterator itr = mSpellProcEventMap.find(spellId);
-            if( itr != mSpellProcEventMap.end( ) )
-                return &itr->second;
-            return NULL;
-        }
+        AreaTrigger * GetAreaTrigger(uint32 trigger);
 
         ReputationOnKillEntry const* GetReputationOnKilEntry(uint32 id) const
         {
@@ -361,45 +267,24 @@ class ObjectMgr
             return NULL;
         }
         void LoadGuilds();
-        void LoadArenaTeams();
         void LoadGroups();
         void LoadQuests();
-        void LoadQuestRelations()
-        { 
-            LoadQuestRelationsHelper(mGOQuestRelations,"gameobject_questrelation");
-            LoadQuestRelationsHelper(mGOQuestInvolvedRelations,"gameobject_involvedrelation");
-            LoadQuestRelationsHelper(mCreatureQuestRelations,"creature_questrelation");
-            LoadQuestRelationsHelper(mCreatureQuestInvolvedRelations,"creature_involvedrelation");
-        } 
-        void LoadQuestRelationsHelper(QuestRelations& map,char const* table);
-        QuestRelations mGOQuestRelations;
-        QuestRelations mGOQuestInvolvedRelations;
-        QuestRelations mCreatureQuestRelations;
-        QuestRelations mCreatureQuestInvolvedRelations;
-
         void LoadSpellChains();
         void LoadSpellLearnSkills();
         void LoadSpellLearnSpells();
         void LoadScripts(ScriptMapMap& scripts, char const* tablename);
         void LoadCreatureTemplates();
-        void LoadCreatures();
-        void LoadCreatureRespawnTimes();
-        void LoadCreatureAddons();
-        void LoadGameobjects();
-        void LoadGameobjectRespawnTimes();
         void LoadSpellProcEvents();
         void LoadSpellThreats();
         void LoadItemPrototypes();
 
         void LoadGossipText();
-
-        void LoadAreaTriggers();
-        void LoadSpellAffects();
-        void LoadQuestAreaTriggers();
-        void LoadTavernAreaTriggers();
+        void LoadAreaTriggerPoints();
 
         void LoadItemTexts();
         void LoadPageTexts();
+
+        void LoadTeleportCoords();
 
         // instance system
         void CleanupInstances();
@@ -410,7 +295,6 @@ class ObjectMgr
         void LoadAuctions();
         void LoadPlayerInfo();
         void LoadPetLevelInfo();
-        void LoadExplorationBaseXP();
         void LoadPetNames();
         void LoadCorpses();
 
@@ -419,7 +303,6 @@ class ObjectMgr
         void LoadWeatherZoneChances();
 
         std::string GeneratePetName(uint32 entry);
-        uint32 GetBaseXP(uint32 level);
 
         void ReturnOrDeleteOldMails(bool serverUp);
 
@@ -482,9 +365,6 @@ class ObjectMgr
         bool IsRankSpellDueToSpell(SpellEntry const *spellInfo_1,uint32 spellId_2);
         bool canStackSpellRank(SpellEntry const *spellInfo);
         bool IsNoStackSpellDueToSpell(uint32 spellId_1, uint32 spellId_2);
-        static bool IsProfessionSpell(uint32 spellId);
-        static bool IsPrimaryProfessionSpell(uint32 spellId);
-        bool IsPrimaryProfessionFirstRankSpell(uint32 spellId);
 
         struct SpellLearnSkillNode
         {
@@ -536,44 +416,6 @@ class ObjectMgr
             else
                 return NULL;
         }
-
-        OpcodeTableMap opcodeTable;
-
-        CellObjectGuids const& GetCellObjectGuids(uint32 mapid, uint32 cell_id)
-        {
-            return mMapObjectGuids[mapid][cell_id];
-        }
-
-        CreatureData const* GetCreatureData(uint32 guid) const
-        {
-            CreatureDataMap::const_iterator itr = mCreatureDataMap.find(guid);
-            if(itr==mCreatureDataMap.end()) return NULL;
-            return &itr->second;
-        }
-        CreatureData& NewCreatureData(uint32 guid) { return mCreatureDataMap[guid]; }
-        void DeleteCreatureData(uint32 guid);
-
-        GameObjectData const* GetGOData(uint32 guid) const
-        {
-            GameObjectDataMap::const_iterator itr = mGameObjectDataMap.find(guid);
-            if(itr==mGameObjectDataMap.end()) return NULL;
-            return &itr->second;
-        }
-        GameObjectData& NewGOData(uint32 guid) { return mGameObjectDataMap[guid]; }
-        void DeleteGOData(uint32 guid);
-
-        void AddCorpseCellData(uint32 mapid, uint32 cellid, uint32 player_guid, uint32 instance);
-        void DeleteCorpseCellData(uint32 mapid, uint32 cellid, uint32 player_guid);
-
-        time_t GetCreatureRespawnTime(uint32 loguid, uint32 instance) { return mCreatureRespawnTimes[MAKE_GUID(loguid,instance)]; }
-        void SaveCreatureRespawnTime(uint32 loguid, uint32 instance, time_t t);
-        time_t GetGORespawnTime(uint32 loguid, uint32 instance) { return mGORespawnTimes[MAKE_GUID(loguid,instance)]; }
-        void SaveGORespawnTime(uint32 loguid, uint32 instance, time_t t);
-        void DeleteRespawnTimeForInstance(uint32 instance);
-
-        // player Dumps
-        bool WritePlayerDump(std::string file, uint32 guid);
-        bool LoadPlayerDump(std::string file, uint32 account, std::string name = "", uint32 newGuid = 0);
     protected:
         uint32 m_auctionid;
         uint32 m_mailid;
@@ -590,13 +432,11 @@ class ObjectMgr
         template<class T> TYPEID _GetTypeId() const;
 
         typedef HM_NAMESPACE::hash_map<uint32, GossipText*> GossipTextMap;
-        typedef HM_NAMESPACE::hash_map<uint32, uint32> QuestAreaTriggerMap;
+        typedef HM_NAMESPACE::hash_map<uint32, AreaTriggerPoint*> AreaTriggerMap;
         typedef HM_NAMESPACE::hash_map<uint32, std::string> ItemTextMap;
-        typedef std::set<uint32> TavernAreaTriggerSet;
 
         GroupSet            mGroupSet;
         GuildSet            mGuildSet;
-        ArenaTeamSet        mArenaTeamSet;
 
         ItemMap             mItems;
         ItemMap             mAitems;
@@ -607,10 +447,9 @@ class ObjectMgr
         AuctionHouseObject  mAllianceAuctions;
         AuctionHouseObject  mNeutralAuctions;
 
-        QuestAreaTriggerMap mQuestAreaTriggerMap;
-        TavernAreaTriggerSet mTavernAreaTriggerSet;
+        AreaTriggerMap      mAreaTriggerMap;
         GossipTextMap       mGossipText;
-        AreaTriggerMap      mAreaTriggers;
+        TeleportMap         mTeleports;
 
         RepOnKillMap        mRepOnKill;
 
@@ -624,24 +463,9 @@ class ObjectMgr
         void BuildPlayerLevelInfo(uint8 race, uint8 class_, uint8 level, PlayerLevelInfo* plinfo) const;
         PlayerInfo **playerInfo;                            // [race][class]
 
-        typedef std::map<uint32,uint32> BaseXPMap;          // [area level][base xp]
-        BaseXPMap mBaseXPTable;
-
         typedef std::map<uint32,std::vector<std::string> > HalfNameMap;
         HalfNameMap PetHalfName0;
         HalfNameMap PetHalfName1;
-
-        MapObjectGuids mMapObjectGuids;
-        CreatureDataMap mCreatureDataMap;
-        GameObjectDataMap mGameObjectDataMap;
-        RespawnTimes mCreatureRespawnTimes;
-        RespawnTimes mGORespawnTimes;
-
-        typedef HM_NAMESPACE::hash_map<uint32, SpellAffection> SpellAffectMap;
-        SpellAffectMap mSpellAffectMap;
-
-        typedef HM_NAMESPACE::hash_map<uint32, SpellProcEventEntry> SpellProcEventMap;
-        SpellProcEventMap mSpellProcEventMap;
 };
 
 #define objmgr MaNGOS::Singleton<ObjectMgr>::Instance()

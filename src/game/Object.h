@@ -31,12 +31,8 @@
 #define M_PI            3.14159265358979323846
 #endif
 
-#define CONTACT_DISTANCE            0.5
-#define INTERACTION_DISTANCE        5
-#define ATTACK_DISTANCE                 5
-#define DETECT_DISTANCE             20                      // max distance to successful detect stealthed unit
-#define MAX_VISIBILITY_DISTANCE     (5*SIZE_OF_GRID_CELL/2) // max distance for visible object show, limited by active zone for player based at cell size (active zone = 5x5 cells)
-#define DEFAULT_VISIBILITY_DISTANCE (SIZE_OF_GRID_CELL)     // default visible distance
+#define OBJECT_CONTACT_DISTANCE 0.5
+#define OBJECT_ITERACTION_DISTANCE 5
 
 enum TYPE
 {
@@ -65,8 +61,6 @@ enum TYPEID
     TYPEID_AIGROUP       = 8,
     TYPEID_AREATRIGGER   = 9
 };
-
-uint32 GuidHigh2TypeId(uint32 guid_hi);
 
 class WorldPacket;
 class UpdateData;
@@ -105,7 +99,14 @@ class MANGOS_DLL_SPEC Object
         uint32 GetEntry() const { return GetUInt32Value(OBJECT_FIELD_ENTRY); }
 
         const uint8& GetTypeId() const { return m_objectTypeId; }
-        bool isType(uint8 mask) const { return (mask & m_objectType); }
+        bool isType(uint8 mask) const
+        {
+
+            if (mask & m_objectType)
+                return true;
+
+            return false;
+        }
 
         virtual void BuildCreateUpdateBlockForPlayer( UpdateData *data, Player *target ) const;
         void SendUpdateToPlayer(Player* player);
@@ -140,7 +141,6 @@ class MANGOS_DLL_SPEC Object
         void SetFloatValue(  uint16 index,       float   value );
 
         void ApplyModUInt32Value(uint16 index, int32 val, bool apply);
-        void ApplyModInt32Value(uint16 index, int32 val, bool apply);
         void ApplyModUInt64Value(uint16 index, int32 val, bool apply);
         void ApplyModFloatValue( uint16 index, float val, bool apply);
 
@@ -182,8 +182,14 @@ class MANGOS_DLL_SPEC Object
 
         void InitValues() { _InitValues(); }
 
-        virtual bool hasQuest(uint32 quest_id) const { return false; }
-        virtual bool hasInvolvedQuest(uint32 quest_id) const { return false; }
+        void addQuest(uint32 questid) { mQuests.push_back(questid); }
+        void addInvolvedQuest(uint32 questid) { mInvolvedQuests.push_back(questid); }
+        bool hasQuest(uint32 quest_id);
+        bool hasInvolvedQuest(uint32 quest_id);
+
+        std::list<uint32> mQuests;
+        std::list<uint32> mInvolvedQuests;
+
     protected:
 
         Object ( );
@@ -195,12 +201,12 @@ class MANGOS_DLL_SPEC Object
 
         virtual void _SetCreateBits(UpdateMask *updateMask, Player *target) const;
         void _BuildMovementUpdate(ByteBuffer * data, uint8 flags, uint32 flags2 ) const;
-        void _BuildValuesUpdate( ByteBuffer *data, UpdateMask *updateMask, Player *target ) const;
+        void _BuildValuesUpdate( ByteBuffer *data, UpdateMask *updateMask  ) const;
+        void _SetPackGUID(ByteBuffer *buffer, const uint64 &guid64) const;
 
         uint16 m_objectType;
 
         uint8 m_objectTypeId;
-        uint8 m_updateFlag;
 
         union
         {
@@ -256,7 +262,7 @@ class MANGOS_DLL_SPEC WorldObject : public Object
             { x = m_positionX; y = m_positionY; z = m_positionZ; }
         float GetOrientation( ) const { return m_orientation; }
         void GetClosePoint( const WorldObject* victim, float &x, float &y, float &z, float distance = 0, float angle = 0 ) const;
-        void GetContactPoint( const WorldObject* obj, float &x, float &y, float &z, float distance = CONTACT_DISTANCE) const;
+        void GetContactPoint( const WorldObject* obj, float &x, float &y, float &z, float distance = OBJECT_CONTACT_DISTANCE) const;
         const float GetObjectSize() const
         {
             return ( m_valuesCount > UNIT_FIELD_BOUNDINGRADIUS ) ? m_floatValues[UNIT_FIELD_BOUNDINGRADIUS] : 0.39f;
@@ -269,9 +275,6 @@ class MANGOS_DLL_SPEC WorldObject : public Object
 
         uint32 GetZoneId() const;
         uint32 GetAreaId() const;
-
-        const char* GetName() const { return m_name.c_str(); }
-        void SetName(std::string newname) { m_name=newname; }
 
         float GetDistanceSq( const WorldObject* obj ) const;
         float GetDistance2dSq( const WorldObject* obj ) const;
@@ -289,11 +292,6 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         bool IsBeingTeleported() { return mSemaphoreTeleport; }
         void SetSemaphoreTeleport(bool semphsetting) { mSemaphoreTeleport = semphsetting; }
 
-        virtual void Say(const char* text, const uint32 language, const uint64 TargetGuid);
-        virtual void Yell(const char* text, const uint32 language, const uint64 TargetGuid);
-        virtual void TextEmote(const char* text, const uint64 TargetGuid);
-        virtual void Whisper(const uint64 receiver, const char* text);
-
         void SendDestroyObject(uint64 guid);
         void SendObjectDeSpawnAnim(uint64 guid);
 
@@ -302,15 +300,8 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         uint32 GetInstanceId() const { return m_InstanceId; }
         void SetInstanceId(uint32 val) { m_InstanceId = val; }
 
-        // main visibility check function in normal case (ignore grey zone distance check)
-        bool isVisibleFor(Player const* u) const { return isVisibleForInState(u,false); }
-
-        // low level function for visibility change code, must be define in all main world object subclasses
-        virtual bool isVisibleForInState(Player const* u, bool inVisibleList) const = 0;
     protected:
         WorldObject( WorldObject *instantiator );
-
-        std::string m_name;
 
     private:
         uint32 m_mapId;

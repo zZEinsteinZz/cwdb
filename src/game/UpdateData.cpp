@@ -29,11 +29,6 @@ UpdateData::UpdateData() : m_blockCount(0)
 {
 }
 
-void UpdateData::AddOutOfRangeGUID(std::set<uint64>& guids)
-{
-    m_outOfRangeGUIDs.insert(guids.begin(),guids.end());
-}
-
 void UpdateData::AddOutOfRangeGUID(const uint64 &guid)
 {
     m_outOfRangeGUIDs.insert(guid);
@@ -54,10 +49,9 @@ void UpdateData::Compress(void* dst, uint32 *dst_size, void* src, int src_size)
     c_stream.opaque = (voidpf)0;
 
     // default Z_BEST_SPEED (1)
-    int z_res = deflateInit(&c_stream, sWorld.getConfig(CONFIG_COMPRESSION));
-    if (z_res != Z_OK)
+    if (Z_OK != deflateInit(&c_stream, sWorld.getConfig(CONFIG_COMPRESSION)))
     {
-        sLog.outError("Can't compress update packet (zlib: deflateInit) Error code: %i (%s)",z_res,zError(z_res));
+        sLog.outError("Can't compress update packet (zlib: deflateInit).");
         *dst_size = 0;
         return;
     }
@@ -67,10 +61,9 @@ void UpdateData::Compress(void* dst, uint32 *dst_size, void* src, int src_size)
     c_stream.next_in = (Bytef*)src;
     c_stream.avail_in = (uInt)src_size;
 
-    z_res = deflate(&c_stream, Z_NO_FLUSH);
-    if (z_res != Z_OK)
+    if (Z_OK != deflate(&c_stream, Z_NO_FLUSH))
     {
-        sLog.outError("Can't compress update packet (zlib: deflate) Error code: %i (%s)",z_res,zError(z_res));
+        sLog.outError("Can't compress update packet (zlib: deflate)");
         *dst_size = 0;
         return;
     }
@@ -82,18 +75,16 @@ void UpdateData::Compress(void* dst, uint32 *dst_size, void* src, int src_size)
         return;
     }
 
-    z_res = deflate(&c_stream, Z_FINISH);
-    if (z_res != Z_STREAM_END)
+    if (Z_STREAM_END != deflate(&c_stream, Z_FINISH))
     {
-        sLog.outError("Can't compress update packet (zlib: deflate should report Z_STREAM_END instead %i (%s)",z_res,zError(z_res));
+        sLog.outError("Can't compress update packet (zlib: deflate should report Z_STREAM_END)");
         *dst_size = 0;
         return;
     }
 
-    z_res = deflateEnd(&c_stream);
-    if (z_res != Z_OK)
+    if (Z_OK != deflateEnd(&c_stream))
     {
-        sLog.outError("Can't compress update packet (zlib: deflateEnd) Error code: %i (%s)",z_res,zError(z_res));
+        sLog.outError("Can't compress update packet (zlib: deflateEnd)");
         *dst_size = 0;
         return;
     }
@@ -106,7 +97,7 @@ bool UpdateData::BuildPacket(WorldPacket *packet)
     ByteBuffer buf(m_data.size() + 10 + m_outOfRangeGUIDs.size()*8);
 
     buf << (uint32) (m_outOfRangeGUIDs.size() > 0 ? m_blockCount + 1 : m_blockCount);
-    buf << (uint8) 0;
+    buf << (uint8) 1;
 
     if(m_outOfRangeGUIDs.size())
     {
@@ -116,9 +107,8 @@ bool UpdateData::BuildPacket(WorldPacket *packet)
         for(std::set<uint64>::const_iterator i = m_outOfRangeGUIDs.begin();
             i != m_outOfRangeGUIDs.end(); i++)
         {
-            //buf.appendPackGUID(*i);
             buf << (uint8)0xFF;
-            buf << (uint64) *i;            
+            buf << (uint64) *i;
         }
     }
 
@@ -128,6 +118,7 @@ bool UpdateData::BuildPacket(WorldPacket *packet)
 
     if (m_data.size() > 50 )
     {
+
         uint32 destsize = buf.size() + buf.size()/10 + 16;
         packet->resize( destsize );
 

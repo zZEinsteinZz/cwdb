@@ -25,344 +25,317 @@
 #include "World.h"
 #include "ObjectMgr.h"
 #include "WorldSession.h"
+#include "Auth/BigNumber.h"
+#include "Auth/Sha1.h"
 #include "UpdateData.h"
-//#include "LootMgr.h"
+#include "LootMgr.h"
 #include "Chat.h"
 #include "ScriptCalls.h"
+#include <zlib/zlib.h>
 #include "MapManager.h"
 #include "ObjectAccessor.h"
 #include "Object.h"
 #include "BattleGroundMgr.h"
-#include "BattleGroundAV.h"
-#include "BattleGroundAB.h"
-#include "BattleGroundEY.h"
-#include "BattleGroundWS.h"
 
 void WorldSession::HandleBattleGroundHelloOpcode( WorldPacket & recv_data )
 {
-    CHECK_PACKET_SIZE(recv_data, 8);
+    CHECK_PACKET_SIZE(recv_data,8);
 
     uint64 guid;
     recv_data >> guid;
     sLog.outDebug( "WORLD: Recvd CMSG_BATTLEMASTER_HELLO Message from: " I64FMT, guid);
 
-    uint32 bgid = 2;                                        // WSG
+    // For now we'll assume all battlefield npcs are mapid 489
+    // gossip related
+    uint32 MapId = 489;
+    uint32 PlayerLevel = 1;
 
-    Creature *unit = ObjectAccessor::Instance().GetCreature(*_player, guid);
-    if(!unit)
-        return;
+    PlayerLevel = GetPlayer()->getLevel();
 
-    switch(unit->GetCreatureInfo()->faction)
-    {
-        //AV Battlemaster
-        case 1214:
-        case 1216:
-            bgid = 1;
-            break;
-        //WSG Battlemaster
-        case 1641:
-        case 1514:
-            bgid = 2;
-            break;
-        //AB Battlemaster
-        case 1577:
-        case 412:
-            bgid = 3;
-            break;
-        // todo: add more...
-    }
-
-    uint32 PlayerLevel = _player->getLevel();
-
-    BattlemasterListEntry const* bl = sBattlemasterListStore.LookupEntry(bgid);
-
-    if(!bl)
-        return;
-
-    if(PlayerLevel < bl->minlvl || PlayerLevel > bl->maxlvl)
-    {
-                                                            // temp, must be gossip message...
-        SendNotification("You don't meet Battleground level requirements");
-        return;
-    }
+    // TODO: Lookup npc entry code and find mapid
 
     WorldPacket data;
-    sBattleGroundMgr.BuildBattleGroundListPacket(&data, guid, _player, bgid);
+    data.Initialize(SMSG_BATTLEFIELD_LIST);
+    data << uint64(guid);
+    data << uint32(MapId);
+
+    std::list<uint32> SendList;
+
+    for(std::map<uint32, BattleGround*>::iterator itr = sBattleGroundMgr.GetBattleGroundsBegin();itr!= sBattleGroundMgr.GetBattleGroundsEnd();++itr)
+    {
+        if(itr->second->GetMapId() == MapId && (PlayerLevel >= itr->second->GetMinLevel()) && (PlayerLevel <= itr->second->GetMaxLevel()))
+            SendList.push_back(itr->second->GetID());
+    }
+
+    uint32 size = SendList.size();
+
+    data << uint32(size << 8);
+
+    uint32 count = 1;
+
+    for(std::list<uint32>::iterator i = SendList.begin();i!=SendList.end();++i)
+    {
+        data << uint32(count << 8);
+        count++;
+    }
+    SendList.clear();
+    data << uint8(0x00);
     SendPacket( &data );
 }
 
 void WorldSession::HandleBattleGroundJoinOpcode( WorldPacket & recv_data )
 {
-    CHECK_PACKET_SIZE(recv_data, 8+4+4+1);
+    CHECK_PACKET_SIZE(recv_data,8);
 
     uint64 guid;
-    uint32 bgid;
-    uint32 instanceid;
-    uint8 asgroup;
-
-    recv_data >> guid;                                      // battlemaster guid
-    recv_data >> bgid;                                      // battleground id (DBC id?)
-    recv_data >> instanceid;                                // instance id, 0 if First Available selected
-    recv_data >> asgroup;                                   // join as group
-
+    recv_data >> guid;                                      // >> MapID >> Instance;
     sLog.outDebug( "WORLD: Recvd CMSG_BATTLEMASTER_JOIN Message from: " I64FMT, guid);
 
-    // ignore if we already in BG or BG queue
-    if(_player->InBattleGround() || _player->InBattleGroundQueue())
+    // ignore if we already in BG
+    if(GetPlayer()->InBattleGround())
         return;
 
-    // check existence
-    BattleGround *bg = sBattleGroundMgr.GetBattleGround(bgid);
+    // TODO: select bg ID base at bg map_id or use map id as bg ID
+    uint8 bgID = 1;
+
+    // check existance
+    BattleGround *bg = sBattleGroundMgr.GetBattleGround(bgID);
     if(!bg)
         return;
 
-    if(asgroup && _player->groupInfo.group)
-    {
-        Group *grp = _player->groupInfo.group;
-        Group::MemberList const& members = grp->GetMembers();
-        for(Group::member_citerator itr = members.begin(); itr != members.end(); ++itr)
-        {
-            Player *member = objmgr.GetPlayer(itr->guid);
-            if(member)
-            {
-                member->SetBattleGroundQueueId(bgid);       // add to queue
+    // We're in BG.
+    GetPlayer()->SetBattleGroundId(bgID);
 
-                // store entry point coords (same as leader entry point)
-                member->SetBattleGroundEntryPoint(_player->GetMapId(),_player->GetPositionX(),_player->GetPositionY(),_player->GetPositionZ(),_player->GetOrientation());
+    //sBattleGroundMgr.SendBattleGroundStatusPacket(GetPlayer(), sBattleGroundMgr.GetBattleGround(1)->GetMapId(), sBattleGroundMgr.GetBattleGround(1)->GetID(),3);
 
-                WorldPacket data;
-                sBattleGroundMgr.BuildBattleGroundStatusPacket(&data, bg, member->GetTeam(), STATUS_WAIT_QUEUE, 0, 0); // send status packet (in queue)
-                member->GetSession()->SendPacket(&data);
-                sBattleGroundMgr.BuildGroupJoinedBattlegroundPacket(&data, bgid);
-                member->GetSession()->SendPacket(&data);
-                bg->AddPlayerToQueue(member->GetGUID(), member->getLevel());
-            }
-        }
-    }
-    else
-    {
-        _player->SetBattleGroundQueueId(bgid);              // add to queue
+    GetPlayer()->SetBattleGroundEntryPointMap(GetPlayer()->GetMapId());
+    GetPlayer()->SetBattleGroundEntryPointO(GetPlayer()->GetOrientation());
+    GetPlayer()->SetBattleGroundEntryPointX(GetPlayer()->GetPositionX());
+    GetPlayer()->SetBattleGroundEntryPointY(GetPlayer()->GetPositionY());
+    GetPlayer()->SetBattleGroundEntryPointZ(GetPlayer()->GetPositionZ());
 
-        // store entry point coords
-        _player->SetBattleGroundEntryPoint(_player->GetMapId(),_player->GetPositionX(),_player->GetPositionY(),_player->GetPositionZ(),_player->GetOrientation());
+    sBattleGroundMgr.SendToBattleGround(GetPlayer(),bgID);
 
-        WorldPacket data;
-        sBattleGroundMgr.BuildBattleGroundStatusPacket(&data, bg, _player->GetTeam(), STATUS_WAIT_QUEUE, 0, 0); // send status packet (in queue)
-        SendPacket(&data);
-        bg->AddPlayerToQueue(_player->GetGUID(), _player->getLevel());
-    }
+    //sBattleGroundMgr.SendBattleGroundStatusPacket(GetPlayer(), sBattleGroundMgr.GetBattleGround(1)->GetMapId(), sBattleGroundMgr.GetBattleGround(1)->GetID(), 0x03, 0x001D2A00);
+
+    sBattleGroundMgr.SendBattleGroundStatusPacket(GetPlayer(), sBattleGroundMgr.GetBattleGround(1)->GetMapId(), sBattleGroundMgr.GetBattleGround(bgID)->GetID(), 0x03, 0x00);
+
+    // Adding Player to BattleGround id = 0
+    sLog.outDetail("BATTLEGROUND: Added %s to BattleGround.", GetPlayer()->GetName());
+    bg->AddPlayer(GetPlayer());
+
+    // Bur: Not sure if we would have to send a position/score update.. maybe the client requests this automatically we'll have to see
 }
 
 void WorldSession::HandleBattleGroundPlayerPositionsOpcode( WorldPacket &recv_data )
 {
-                                                            // empty opcode
-    sLog.outDebug("WORLD: Recvd MSG_BATTLEGROUND_PLAYER_POSITIONS Message");
 
-    if(!_player->InBattleGround())                          // can't be received if player not in battleground
+    if(!GetPlayer()->InBattleGround())
         return;
 
-    BattleGround *bg = sBattleGroundMgr.GetBattleGround(_player->GetBattleGroundId());
+    BattleGround* bg = sBattleGroundMgr.GetBattleGround(GetPlayer()->GetBattleGroundId());
     if(!bg)
         return;
 
-    if(bg->GetID() == BATTLEGROUND_WS)
+    std::list<Player*> ListToSend;
+
+    for(std::list<Player*>::iterator i = bg->GetPlayersBegin(); i != bg->GetPlayersEnd(); ++i)
     {
-        uint32 count = 0;
-
-        Player *ap = objmgr.GetPlayer(((BattleGroundWS*)bg)->GetAllianceFlagPickerGUID());
-        if(ap)
-            count++;
-
-        Player *hp = objmgr.GetPlayer(((BattleGroundWS*)bg)->GetHordeFlagPickerGUID());
-        if(hp)
-            count++;
-
-        WorldPacket data(MSG_BATTLEGROUND_PLAYER_POSITIONS, (4+4+16*count));
-        data << uint32(0);                                  // 2.0.8, unk
-        data << count;
-        if(ap)
-        {
-            data << ap->GetGUID();
-            data << ap->GetPositionX();
-            data << ap->GetPositionY();
-        }
-        if(hp)
-        {
-            data << hp->GetGUID();
-            data << hp->GetPositionX();
-            data << hp->GetPositionY();
-        }
-
-        SendPacket(&data);
+        if((*i) != GetPlayer())
+            ListToSend.push_back(*i);
     }
+
+    WorldPacket data(MSG_BATTLEGROUND_PLAYER_POSITIONS, (4+16*ListToSend.size()+1));
+    data << uint32(ListToSend.size());
+    for(std::list<Player*>::iterator itr=ListToSend.begin();itr!=ListToSend.end();++itr)
+    {
+        data << (uint64)(*itr)->GetGUID();
+        data << (float)(*itr)->GetPositionX();
+        data << (float)(*itr)->GetPositionY();
+    }
+    data << uint8(0);
+    SendPacket(&data);
 }
 
 void WorldSession::HandleBattleGroundPVPlogdataOpcode( WorldPacket &recv_data )
 {
     sLog.outDebug( "WORLD: Recvd MSG_PVP_LOG_DATA Message");
 
-    if(!_player->InBattleGround())
+    if(!GetPlayer()->InBattleGround())
         return;
 
-    BattleGround *bg = sBattleGroundMgr.GetBattleGround(_player->GetBattleGroundId());
+    BattleGround* bg = sBattleGroundMgr.GetBattleGround(GetPlayer()->GetBattleGroundId());
     if(!bg)
         return;
 
-    WorldPacket data;
-    sBattleGroundMgr.BuildPvpLogDataPacket(&data, bg, 2);
+    WorldPacket data(MSG_PVP_LOG_DATA, (1+4+40*bg->GetPlayerScoresSize()));
+    data << uint8(0x0);
+    data << uint32(bg->GetPlayerScoresSize());
+
+    for(std::map<uint64, BattleGroundScore>::iterator itr=bg->GetPlayerScoresBegin();itr!=bg->GetPlayerScoresEnd();++itr)
+    {
+        data << (uint64)itr->first;                         //8
+        data << (uint32)itr->second.Rank;                   //4                    //Rank
+        data << (uint32)itr->second.KillingBlows;           //4
+        data << (uint32)itr->second.Deaths;                 //4
+        data << (uint32)itr->second.HonorableKills;         //4
+        data << (uint32)itr->second.DishonorableKills;      //4
+        data << (uint32)itr->second.BonusHonor;             //4
+        data << (uint32)0;
+        data << (uint32)0;
+        /*data << itr->second.Rank;
+        data << itr->second.Unk1;
+        data << itr->second.Unk2;
+        data << itr->second.Unk3;
+        data << itr->second.Unk4;*/
+    }
     SendPacket(&data);
 
-    sLog.outDebug( "WORLD: Sent MSG_PVP_LOG_DATA Message");
+    sLog.outDebug( "WORLD: Send MSG_PVP_LOG_DATA Message players:%u", bg->GetPlayerScoresSize());
+
+    //data << (uint8)0; ////Warsong Gulch
+    /*data << (uint8)1; //
+    data << (uint8)1; //
+
+    //strangest thing 2 different
+    data << (uint32)NumberofPlayers;
+    for (uint8 i = 0; i < NumberofPlayers; i++)
+    {
+        data << (uint64)8;//GUID     //8
+        data << (uint32)0;//rank
+        data << (uint32)0;//killing blows
+        data << (uint32)0;//honorable kills
+        data << (uint32)0;//deaths
+        data << (uint32)0;//Bonus Honor
+        data << (uint32)0;//I think Instance
+        data << (uint32)0;
+        data << (uint32)0;            //8*4 = 32+8=40
+
+        //1 player is 40 bytes
+    }
+    data.hexlike();
+    SendPacket(&data);*/
 }
 
 void WorldSession::HandleBattleGroundListOpcode( WorldPacket &recv_data )
 {
-    CHECK_PACKET_SIZE(recv_data, 4);
+    CHECK_PACKET_SIZE(recv_data,4);
 
     sLog.outDebug( "WORLD: Recvd CMSG_BATTLEFIELD_LIST Message");
 
-    if(!_player->InBattleGroundQueue())                     // can't be received if player not in BG queue
-        return;
+    uint32 MapID;
+    uint32 NumberOfInstances;
 
-    uint32 bgid;
-    recv_data >> bgid;                                      // id from DBC
+    //recv_data.hexlike();
 
-    BattlemasterListEntry const* bl = sBattlemasterListStore.LookupEntry(bgid);
+    recv_data >> MapID;
 
-    if(!bl)
-        return;
+    //CMSG_BATTLEFIELD_LIST (0x023C);
 
-    WorldPacket data;
-    sBattleGroundMgr.BuildBattleGroundListPacket(&data, _player->GetGUID(), _player, bgid);
-    SendPacket( &data );
+    //MapID = 489;
+
+    NumberOfInstances = 8;
+    WorldPacket data(SMSG_BATTLEFIELD_LIST, (8+4+4+4*NumberOfInstances+1));
+    data << uint64(GetPlayer()->GetGUID());
+    data << uint32(MapID);
+    data << uint32(NumberOfInstances << 8);
+    for (uint8 i = 0; i < NumberOfInstances; i++)
+    {
+        data << uint32(i << 8);
+    }
+    data << uint8(0x00);
+
+    SendPacket(&data);
+
 }
 
 void WorldSession::HandleBattleGroundPlayerPortOpcode( WorldPacket &recv_data )
 {
-    CHECK_PACKET_SIZE(recv_data, 1+1+4+2+1);
+    //CHECK_PACKET_SIZE(recv_data,?);
 
     sLog.outDebug( "WORLD: Recvd CMSG_BATTLEFIELD_PORT Message");
-    //recv_data.hexlike();
+    //CMSG_BATTLEFIELD_PORT
 
-    uint8 unk1;
-    uint8 unk2;                                             // unk, can be 0x0 (may be if was invited?) and 0x1
-    uint32 bgId;                                            // id from dbc
-    uint16 unk;
-    uint8 action;                                           // enter battle 0x1, leave queue 0x0
+    /*uint64 guid = 0;
+    uint32 MapID = 0;
+    uint32 Instance = 0;
+    uint8 Enter = 0;
 
-    recv_data >> unk1 >> unk2 >> bgId >> unk;
-    recv_data >> action;
+    WorldPacket data;
+    recv_data.hexlike();
 
-    BattleGround *bg = sBattleGroundMgr.GetBattleGround(bgId);
-    if(bg)
+    //if que = 0 player logs in
+    if (GetPlayer()->GetInstanceQue() == 0)
     {
-        if(_player->InBattleGroundQueue())
+        //recv_data >> guid >> MapID >> Instance;
+
+        recv_data >> (uint32) MapID >> (uint8)Enter;
+
+        if (Enter == 1)
         {
-            switch(action)
-            {
-                case 1:
-                    bg->RemovePlayerFromQueue(_player->GetGUID());
-                    _player->SetBattleGroundId(bg->GetID());
-                    sBattleGroundMgr.SendToBattleGround(_player, bgId);
-                    bg->AddPlayer(_player);
-                    break;
-                case 0:
-                {
-                    bg->RemovePlayerFromQueue(_player->GetGUID());
-                    WorldPacket data;
-                    sBattleGroundMgr.BuildBattleGroundStatusPacket(&data, bg, _player->GetTeam(), STATUS_NONE, 0, 0);
-                    SendPacket(&data);
-                    break;
-                }
-                default:
-                    sLog.outError("Battleground port: unknown action %u", action);
-            }
+            //Enter the battleground
+            //we can do some type of system. BattleGround GetPlayer(guid)->Getcurrentinstance..... enzzz
+
+            Instance = GetPlayer()->GetCurrentInstance();
+            //MapID = GetPlayer()->GetInstanceMapId();
+
+            sLog.outDebug( "BATTLEGROUND: Sending Player:%u to Map:%u Instance %u",(uint32)guid, MapID, Instance);
+
+            //data << uint32(0x000001E9) << float(1519.530273f) << float(1481.868408f) << float(352.023743f) << float(3.141593f);
+            //Map* Map = MapManager::Instance().GetMap(GetPlayer()->GetInstanceMapId());
+            Map* Map = MapManager::Instance().GetMap(MapID);
+            float posz = Map->GetHeight(1021.24,1418.05);
+            GetPlayer()->SendNewWorld(MapID, 1021.24, 1418.05,posz+0.5,0.0);
+
+            SendBattleFieldStatus(GetPlayer(),MapID, Instance, 3, 0);
+            //GetPlayer()->SendInitWorldStates(MapID);
+
         }
+        else
+        {
+
+            //remove the battleground sign
+            SendBattleFieldStatus(GetPlayer(),MapID, Instance, 0, 0);
+        }
+
     }
+
+    //if player que = in progress and this function is called again its becouse of it quits que
+    //MapID and instance maybe not needed for removing
+    if (GetPlayer()->GetInstanceQue() > 0)
+    {
+        sLog.outDebug( "BATTLEGROUND: Player is quiting que");
+
+        SendBattleFieldStatus(GetPlayer(),GetPlayer()->GetInstanceMapId(), GetPlayer()->GetCurrentInstance(), 0, 0);
+
+        GetPlayer()->SetInstanceQue(0);
+        GetPlayer()->SetInstanceMapId(0);
+        GetPlayer()->SetInstanceType(0);
+    }
+
+    //HORDE Coordinates
+    //x:1021.24
+    //y:1418.05
+    //z:341.56
+
+    //uint32 MapID = GetPlayer()->GetMapId();
+    */
 }
 
 void WorldSession::HandleBattleGroundLeaveOpcode( WorldPacket &recv_data )
 {
-    CHECK_PACKET_SIZE(recv_data, 1+1+4+2);
-
+    CHECK_PACKET_SIZE(recv_data,4);
+                                                            //0x2E1
     sLog.outDebug( "WORLD: Recvd CMSG_LEAVE_BATTLEFIELD Message");
+    uint32 MapID;
+    WorldPacket data;
 
-    uint8 unk1, unk2;
-    uint32 bgid;                                            // id from DBC
-    uint16 unk3;
+    recv_data >> MapID;
 
-    recv_data >> unk1 >> unk2 >> bgid >> unk3;
+    /* Send Back to old xyz
+    Map* Map = MapManager::Instance().GetMap(GetPlayer()->GetInstanceMapId());
+    float posz = Map->GetHeight(1021.24,1418.05);
+    GetPlayer()->SendNewWorld(MapID, 1021.24, 1418.05,posz+0.5,0.0);
+    */
 
-    BattleGround *bg = sBattleGroundMgr.GetBattleGround(_player->GetBattleGroundId());
-    if(bg)
-        bg->RemovePlayer(_player->GetGUID(), true, true);
-}
-
-void WorldSession::HandleBattlefieldStatusOpcode( WorldPacket & recv_data )
-{
-    // empty opcode
-    sLog.outDebug( "WORLD: Battleground status" );
-
-    // TODO: we must put player back to battleground in case disconnect (< 5 minutes offline time) or teleport player on login(!) from battleground map to entry point
-    if(_player->InBattleGround())
-    {
-        BattleGround *bg = sBattleGroundMgr.GetBattleGround(_player->GetBattleGroundId());
-        if(bg)
-        {
-            uint32 time1 = getMSTime() - bg->GetStartTime();
-            WorldPacket data;
-            sBattleGroundMgr.BuildBattleGroundStatusPacket(&data, bg, _player->GetTeam(), STATUS_IN_PROGRESS, 0, time1);
-            SendPacket(&data);
-        }
-    }
-}
-
-void WorldSession::HandleAreaSpiritHealerQueryOpcode( WorldPacket & recv_data )
-{
-    sLog.outDebug("WORLD: CMSG_AREA_SPIRIT_HEALER_QUERY");
-
-    CHECK_PACKET_SIZE(recv_data, 8);
-
-    if(!_player->InBattleGround())
-    {
-        return;
-    }
-    else
-    {
-        BattleGround *bg = sBattleGroundMgr.GetBattleGround(_player->GetBattleGroundId());
-        if(!bg)
-            return;
-
-        uint64 guid;
-        recv_data >> guid;
-        WorldPacket data(SMSG_AREA_SPIRIT_HEALER_TIME, 12);
-        uint32 time_ = 30000 - (getMSTime() - bg->GetLastResurrectTime()); // resurrect every 30 seconds
-        if(time_ == uint32(-1))
-            time_ = 0;
-        data << guid << time_;
-        SendPacket(&data);
-    }
-}
-
-void WorldSession::HandleAreaSpiritHealerQueueOpcode( WorldPacket & recv_data )
-{
-    sLog.outDebug("WORLD: CMSG_AREA_SPIRIT_HEALER_QUEUE");
-
-    CHECK_PACKET_SIZE(recv_data, 8);
-
-    if(!_player->InBattleGround())
-    {
-        return;
-    }
-    else
-    {
-        BattleGround *bg = sBattleGroundMgr.GetBattleGround(_player->GetBattleGroundId());
-        if(!bg)
-            return;
-
-        uint64 guid;
-        recv_data >> guid;
-
-        bg->AddPlayerToResurrectQueue(guid, _player->GetGUID());
-    }
 }

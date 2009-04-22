@@ -41,6 +41,7 @@ Guild::Guild()
     CreatedYear = 0;
     CreatedMonth = 0;
     CreatedDay = 0;
+
 }
 
 Guild::~Guild()
@@ -101,23 +102,24 @@ bool Guild::create(uint64 lGuid, std::string gname)
     rname = "Initiate";
     CreateRank(rname,GR_RIGHT_GCHATLISTEN | GR_RIGHT_GCHATSPEAK);
 
-    return AddMember(lGuid, (uint32)GR_GUILDMASTER);
+    AddMember(lGuid, (uint32)GR_GUILDMASTER);
+    return true;
 }
 
-bool Guild::AddMember(uint64 plGuid, uint32 plRank)
+void Guild::AddMember(uint64 plGuid, uint32 plRank)
 {
     std::string plName;
     uint8 plLevel, plClass;
     uint32 plZone;
 
     if(!objmgr.GetPlayerNameByGUID(plGuid, plName))         // player doesnt exist
-        return false;
+        return;
     if(Player::GetGuildIdFromDB(plGuid) != 0)               // player already in guild
-        return false;
+        return;
 
     // remove all player signs from another petitions
     // this will be prevent attempt joining player to many guilds and corrupt guild data integrity
-    Player::RemovePetitionsAndSigns(plGuid, 9);
+    Player::RemovePetitionsAndSigns(plGuid);
 
     Player* pl = objmgr.GetPlayer(plGuid);
     if(pl)
@@ -125,7 +127,7 @@ bool Guild::AddMember(uint64 plGuid, uint32 plRank)
         plLevel = (uint8)pl->getLevel();
         plClass = (uint8)pl->getClass();
 
-        AreaTableEntry const* area = GetAreaEntryByAreaFlag(MapManager::Instance().GetMap(pl->GetMapId(), pl)->GetAreaFlag(pl->GetPositionX(),pl->GetPositionY()));
+        AreaTableEntry  const* area = GetAreaEntryByAreaFlag(MapManager::Instance().GetMap(pl->GetMapId(), pl)->GetAreaFlag(pl->GetPositionX(),pl->GetPositionY()));
         if (area)                                           // For example: .worldport -2313 478 48 1    Zone will be 0(unkonown), even though it's a usual cave
             plZone = area->zone;                            // would cause null pointer exception
         else
@@ -138,7 +140,7 @@ bool Guild::AddMember(uint64 plGuid, uint32 plRank)
 
         QueryResult *result = sDatabase.PQuery("SELECT `class` FROM `character` WHERE `guid`='%u'", GUID_LOPART(plGuid));
         if(!result)
-            return false;
+            return;
         plClass = (*result)[0].GetUInt8();
         delete result;
     }
@@ -173,7 +175,6 @@ bool Guild::AddMember(uint64 plGuid, uint32 plRank)
         Player::SetUInt32ValueInDB(PLAYER_GUILDID, Id, plGuid);
         Player::SetUInt32ValueInDB(PLAYER_GUILDRANK, newmember.RankId, plGuid);
     }
-    return true;
 }
 
 void Guild::SetMOTD(std::string motd)
@@ -194,25 +195,21 @@ void Guild::SetGINFO(std::string ginfo)
     sDatabase.PExecute("UPDATE `guild` SET `info`='%s' WHERE `guildid`='%u'", ginfo.c_str(), Id);
 }
 
-bool Guild::LoadGuildFromDB(uint32 GuildId)
+void Guild::LoadGuildFromDB(uint32 GuildId)
 {
-    if(!LoadRanksFromDB(GuildId))
-        return false;
-
-    if(!LoadMembersFromDB(GuildId))
-        return false;
+    LoadRanksFromDB(GuildId);
+    LoadMembersFromDB(GuildId);
 
     QueryResult *result = sDatabase.PQuery("SELECT `guildid`,`name`,`leaderguid`,`EmblemStyle`,`EmblemColor`,`BorderStyle`,`BorderColor`,`BackgroundColor`,`info`,`MOTD`,`createdate` FROM `guild` WHERE `guildid` = '%u'", GuildId);
 
     if(!result)
-        return false;
+        return;
 
     Field *fields = result->Fetch();
 
     Id = fields[0].GetUInt32();
     name = fields[1].GetCppString();
     leaderGuid  = MAKE_GUID(fields[2].GetUInt32(),HIGHGUID_PLAYER);
-
     EmblemStyle = fields[3].GetUInt32();
     EmblemColor = fields[4].GetUInt32();
     BorderStyle = fields[5].GetUInt32();
@@ -228,28 +225,15 @@ bool Guild::LoadGuildFromDB(uint32 GuildId)
     CreatedDay   = dTime%100;
     CreatedMonth = (dTime/100)%100;
     CreatedYear  = (dTime/10000)%10000;
-
-    // if leader not exist attempt promote other member
-    if(!objmgr.GetPlayerAccountIdByGUID(leaderGuid ))
-    {
-        DelMember(leaderGuid);
-
-        // check no members case (disbanded) 
-        if(members.size()==0)
-            return false;
-    }
-
     sLog.outDebug("Guild %u Creation time Loaded day: %u, month: %u, year: %u", GuildId, CreatedDay, CreatedMonth, CreatedYear);
-    return true;
 }
 
-bool Guild::LoadRanksFromDB(uint32 GuildId)
+void Guild::LoadRanksFromDB(uint32 GuildId)
 {
     Field *fields;
     QueryResult *result = sDatabase.PQuery("SELECT `rname`,`rights` FROM `guild_rank` WHERE `guildid` = '%u' ORDER BY `rid` ASC", GuildId);
 
-    if(!result)
-        return false;
+    if(!result) return;
 
     do
     {
@@ -258,41 +242,32 @@ bool Guild::LoadRanksFromDB(uint32 GuildId)
 
     }while( result->NextRow() );
     delete result;
-
-    return true;
 }
 
-bool Guild::LoadMembersFromDB(uint32 GuildId)
+void Guild::LoadMembersFromDB(uint32 GuildId)
 {
+    Field *fields;
+    Player *pl;
+
     QueryResult *result = sDatabase.PQuery("SELECT `guid`,`rank`,`Pnote`,`OFFnote` FROM `guild_member` WHERE `guildid` = '%u'", GuildId);
 
     if(!result)
-        return false;
+        return;
 
     do
     {
-        Field *fields = result->Fetch();
+        fields = result->Fetch();
         MemberSlot newmember;
         newmember.guid = MAKE_GUID(fields[0].GetUInt32(),HIGHGUID_PLAYER);
         newmember.RankId = fields[1].GetUInt32();
-
-        // player not exist
-        if(!objmgr.GetPlayerAccountIdByGUID(newmember.guid))
-            continue;
-
-        LoadPlayerStats(&newmember);
-
+        pl = ObjectAccessor::Instance().FindPlayer(newmember.guid);
+        if(!pl || !pl->IsInWorld()) LoadPlayerStats(&newmember);
         newmember.Pnote = fields[2].GetCppString();
         newmember.OFFnote = fields[3].GetCppString();
         members.push_back(newmember);
 
     }while( result->NextRow() );
     delete result;
-
-    if(members.size()==0)
-        return false;
-
-    return true;
 }
 
 void Guild::LoadPlayerStats(MemberSlot* memslot)
@@ -373,23 +348,20 @@ void Guild::DelMember(uint64 guid, bool isDisbanding)
                 Player::SetUInt32ValueInDB(PLAYER_GUILDRANK, GR_GUILDMASTER, newLeaderGUID);
                 objmgr.GetPlayerNameByGUID(newLeaderGUID, newLeaderName);
             }
+            objmgr.GetPlayerNameByGUID(guid, oldLeaderName);
 
-            // when leader non-exist (at guild load with deleted leader only) not send broadcasts
-            if(objmgr.GetPlayerNameByGUID(guid, oldLeaderName))
-            {
-                WorldPacket data(SMSG_GUILD_EVENT, (1+1+oldLeaderName.size()+1+newLeaderName.size()+1));
-                data << (uint8)GE_LEADER_CHANGED;
-                data << (uint8)2;
-                data << oldLeaderName;
-                data << newLeaderName;
-                this->BroadcastPacket(&data);
+            WorldPacket data(SMSG_GUILD_EVENT, (1+1+oldLeaderName.size()+1+newLeaderName.size()+1));
+            data << (uint8)GE_LEADER_CHANGED;
+            data << (uint8)2;
+            data << oldLeaderName;
+            data << newLeaderName;
+            this->BroadcastPacket(&data);
 
-                data.Initialize(SMSG_GUILD_EVENT, (1+1+oldLeaderName.size()+1));
-                data << (uint8)GE_LEFT;
-                data << (uint8)1;
-                data << oldLeaderName;
-                this->BroadcastPacket(&data);
-            }
+            data.Initialize(SMSG_GUILD_EVENT, (1+1+oldLeaderName.size()+1));
+            data << (uint8)GE_LEFT;
+            data << (uint8)1;
+            data << oldLeaderName;
+            this->BroadcastPacket(&data);
 
             sLog.outDebug( "WORLD: Sent (SMSG_GUILD_EVENT)" );
         }
@@ -530,9 +502,6 @@ void Guild::BroadcastPacket(WorldPacket *packet)
 
 void Guild::CreateRank(std::string name,uint32 rights)
 {
-    if(m_ranks.size() >= GUILD_MAXRANKS)
-        return;
-
     uint32 rank;
 
     QueryResult *result = sDatabase.PQuery( "SELECT MAX(`rid`) FROM `guild_rank` WHERE `guildid`='%u'",Id);
@@ -680,6 +649,10 @@ void Guild::Roster(WorldSession *session)
             data << itr->Class;
             data << itr->zoneId;
             data << (float(time(NULL)-logout_time) / DAY);
+            /*data << (uint8)0;
+            data << (uint8)1;
+            data << (uint8)1;
+            data << (uint8)1;*/
             data << itr->Pnote;
             data << itr->OFFnote;
         }

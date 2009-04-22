@@ -190,31 +190,25 @@ void WorldSession::HandleItemQuerySingleOpcode( WorldPacket & recv_data )
     CHECK_PACKET_SIZE(recv_data,4+4+4);
 
     //sLog.outDebug("WORLD: CMSG_ITEM_QUERY_SINGLE");
-    uint32 item;
-    uint64 guid;
-    recv_data >> item >> guid;
+                                                            // guess size
+    WorldPacket data( SMSG_ITEM_QUERY_SINGLE_RESPONSE, 600 );
+
+    uint32 item, guidLow, guidHigh;
+    recv_data >> item >> guidLow >> guidHigh;
 
     sLog.outDetail("STORAGE: Item Query = %u", item);
 
     ItemPrototype const *pProto = objmgr.GetItemPrototype( item );
-
-    Item *pItem = _player->GetItemByGuid( guid );
-  
-    WorldPacket data( SMSG_ITEM_QUERY_SINGLE_RESPONSE, 600);// guess size
-
     if( pProto )
     {
         data << pProto->ItemId;
         data << pProto->Class;
-        
-        // client known only 0 subclass (and 1-2 obsolete subclasses)
-        data << uint32(pProto->Class==ITEM_CLASS_CONSUMABLE ? 0 : pProto->SubClass);
-
-        data << uint32(-1);                                 // new 2.0.3, not exist in wdb cache?
+        // client known only 0 subclass (and 1-2 obsolute subclasses)
+        data << (pProto->Class==ITEM_CLASS_CONSUMABLE ? uint32(0) : pProto->SubClass);
         data << pProto->Name1;
-        data << uint8(0x00);                                //pProto->Name2; // blizz not send name there, just uint8(0x00); <-- \0 = empty string = empty name...
-        data << uint8(0x00);                                //pProto->Name3; // blizz not send name there, just uint8(0x00);
-        data << uint8(0x00);                                //pProto->Name4; // blizz not send name there, just uint8(0x00);
+        data << pProto->Name2;
+        data << pProto->Name3;
+        data << pProto->Name4;
         data << pProto->DisplayInfoID;
         data << pProto->Quality;
         data << pProto->Flags;
@@ -265,26 +259,11 @@ void WorldSession::HandleItemQuerySingleOpcode( WorldPacket & recv_data )
             if(!spell)
             {
                 data << uint32(0);
-                if (pItem)
-                {
-                    // SOCK_ENCHANTMENT_SLOT.. SOCK_ENCHANTMENT_SLOT+2 is gem sockets
-                    if ((s < 3) && (pItem->GetEnchantmentId(EnchantmentSlot(SOCK_ENCHANTMENT_SLOT+ s))))
-                    {
-                        data << uint32(1);
-                    }
-                    else
-                    {
-                        data <<uint32(0);
-                    }
-                }
-                else
-                {
-                    data << uint32(0);
-                }
                 data << uint32(0);
                 data << uint32(0);
+                data << uint32(-1);
                 data << uint32(0);
-                data << uint32(0);
+                data << uint32(-1);
             }
             else
             {
@@ -317,31 +296,18 @@ void WorldSession::HandleItemQuerySingleOpcode( WorldPacket & recv_data )
         data << pProto->LockID;
         data << pProto->Material;
         data << pProto->Sheath;
-        data << pProto->RandomProperty;
-        data << pProto->RandomSuffix;
+        data << pProto->Extra;
         data << pProto->Block;
         data << pProto->ItemSet;
         data << pProto->MaxDurability;
         data << pProto->Area;
-        data << pProto->Map;              // Added in 1.12.x & 2.0.1 client branch
-        data << pProto->BagFamily;
-        data << pProto->TotemCategory;
-        for(int s = 0; s < 3; s++)
-        {
-            data << pProto->Socket[s].Color;
-            data << pProto->Socket[s].Content;
-        }
-        data << pProto->socketBonus;
-        data << pProto->GemProperties;
-        data << pProto->ExtendedCost;
-        data << pProto->RequiredDisenchantSkill;
+        data << pProto->Unknown1;
+        data << pProto->Unknown1;                           // Added in 1.12.x client branch
     }
     else
     {
-        // this is not blizz like responce
-        // blizz responce: item | 0x80000000
         data << item;
-        for(int a = 0; a < 18; a++)
+        for(int a = 0; a < 11; a++)
             data << uint64(0);
         data << uint32(0);                                  // Added in 1.12.x client branch
         SendPacket( &data );
@@ -356,6 +322,7 @@ void WorldSession::HandleReadItem( WorldPacket & recv_data )
 
     //sLog.outDebug( "WORLD: CMSG_READ_ITEM");
 
+    WorldPacket data;
     uint8 bag, slot;
     recv_data >> bag >> slot;
 
@@ -364,8 +331,6 @@ void WorldSession::HandleReadItem( WorldPacket & recv_data )
 
     if( pItem && pItem->GetProto()->PageText )
     {
-        WorldPacket data;
-
         uint8 msg = _player->CanUseItem( pItem );
         if( msg == EQUIP_ERR_OK )
         {
@@ -575,9 +540,6 @@ void WorldSession::SendListInventory( uint64 vendorguid )
         return;
     }
 
-    // load vendor items if not yet
-    pCreature->LoadGoods();
-
     uint8 numitems = pCreature->GetItemCount();
     uint8 count = 0;
     uint32 ptime = time(NULL);
@@ -618,7 +580,7 @@ void WorldSession::SendListInventory( uint64 vendorguid )
                     price = 9 * price / 10;
 
                 data << price;
-                data << pProto->MaxDurability;
+                data << uint32( 0xFFFFFFFF );
                 data << pProto->BuyCount;
             }
         }
@@ -761,12 +723,6 @@ void WorldSession::HandleSetAmmoOpcode(WorldPacket & recv_data)
 {
     CHECK_PACKET_SIZE(recv_data,4);
 
-    if(!GetPlayer()->isAlive())
-    {
-        GetPlayer()->SendEquipError( EQUIP_ERR_YOU_ARE_DEAD, NULL, NULL );
-        return;
-    }
-
     sLog.outDebug("WORLD: CMSG_SET_AMMO");
     uint32 item;
 
@@ -777,7 +733,7 @@ void WorldSession::HandleSetAmmoOpcode(WorldPacket & recv_data)
 
 void WorldSession::SendEnchantmentLog(uint64 Target, uint64 Caster,uint32 ItemID,uint32 SpellID)
 {
-    WorldPacket data(SMSG_ENCHANTMENTLOG, (8+8+4+4+1)); // last check 2.0.10
+    WorldPacket data(SMSG_ENCHANTMENTLOG, (8+8+4+4+1));
     data << Target;
     data << Caster;
     data << ItemID;
@@ -786,13 +742,12 @@ void WorldSession::SendEnchantmentLog(uint64 Target, uint64 Caster,uint32 ItemID
     SendPacket(&data);
 }
 
-void WorldSession::SendItemEnchantTimeUpdate(uint64 Playerguid, uint64 Itemguid,uint32 slot,uint32 Duration)
+void WorldSession::SendItemEnchantTimeUpdate(uint64 Itemguid,uint32 slot,uint32 Duration)
 {
-    WorldPacket data(SMSG_ITEM_ENCHANT_TIME_UPDATE, (8+4+4+8)); // last check 2.0.10
-    data << uint64(Itemguid);
-    data << uint32(slot);
-    data << uint32(Duration);
-    data << uint64(Playerguid);
+    WorldPacket data(SMSG_ITEM_ENCHANT_TIME_UPDATE, (8+4+4));
+    data << Itemguid;
+    data << slot;
+    data << Duration;
     SendPacket(&data);
 }
 
@@ -824,7 +779,7 @@ void WorldSession::HandleWrapItemOpcode(WorldPacket& recv_data)
     sLog.outDebug("Received opcode CMSG_WRAP_ITEM");
 
     uint8 gift_bag, gift_slot, item_bag, item_slot;
-    //recv_data.hexlike();
+    recv_data.hexlike();
 
     recv_data >> gift_bag >> gift_slot;                     // paper
     recv_data >> item_bag >> item_slot;                     // item
@@ -912,116 +867,4 @@ void WorldSession::HandleWrapItemOpcode(WorldPacket& recv_data)
 
     uint32 count = 1;
     _player->DestroyItemCount(gift, count, true);
-}
-
-void WorldSession::HandleSocketOpcode(WorldPacket& recv_data)
-{
-    sLog.outDebug("WORLD: CMSG_SOCKET_ITEM");
-
-    CHECK_PACKET_SIZE(recv_data,8*4);
-
-    uint64 guids[4];
-    uint32 GemEnchants[3], OldEnchants[3];
-    Item *Gems[3];
-    bool SocketBonusActivated, SocketBonusToBeActivated;
-
-
-    for(int i = 0; i < 4; i++)
-        recv_data >> guids[i];
-
-    //cheat -> tried to socket same gem multiple times
-    if((guids[1] && (guids[1] == guids[2] || guids[1] == guids[3])) || (guids[2] && (guids[2] == guids[3]))) 
-        return;
-
-    uint16 pos = _player->GetPosByGuid(guids[0]);
-    Item *itemTarget = _player->GetItemByPos(pos);
-    if(!itemTarget) //missing item to socket
-        return;
-
-    uint16 slot = pos & 255;                                //this slot is excepted when applying / removing meta gem bonus
-
-    for(int i = 0; i < 3; i++)
-    {
-        pos = _player->GetPosByGuid(guids[i + 1]);
-        Gems[i] = _player->GetItemByPos(pos);
-    }
-
-    GemPropertiesEntry const *GemProps[3];
-    for(int i = 0; i < 3; ++i)                              //get geminfo from dbc storage
-    {
-        GemProps[i] = (Gems[i]) ? sGemPropertiesStore.LookupEntry(Gems[i]->GetProto()->GemProperties) : NULL;
-    }
-
-    for(int i = 0; i < 3; ++i)                              //check for hack maybe
-    {
-        // tried to put gem in socket where no socket exists / tried to put normal gem in meta socket
-        // tried to put meta gem in normal socket
-        if( GemProps[i] && ( (!itemTarget->GetProto()->Socket[i].Color) || (itemTarget->GetProto()->Socket[i].Color == 1 && GemProps[i]->color != 1) || (itemTarget->GetProto()->Socket[i].Color != 1 && GemProps[i]->color == 1))) 
-            return;
-    }
-
-    for(int i = 0; i < 3; ++i)                              //get new and old enchantments
-    {
-        GemEnchants[i] = (GemProps[i]) ? GemProps[i]->spellitemenchantement : 0;
-        OldEnchants[i] = itemTarget->GetEnchantmentId(EnchantmentSlot(SOCK_ENCHANTMENT_SLOT+i));
-    }
-
-    SocketBonusActivated = itemTarget->GemsFitSockets();    //save state of socketbonus
-    _player->ToggleMetaGemsActive(slot, false);             //turn off all metagems (except for the target item)
-
-    //if a meta gem is being equipped, all information has to be written to the item before testing if the conditions for the gem are met
-
-    //remove ALL enchants
-    for(uint32 enchant_slot = SOCK_ENCHANTMENT_SLOT; enchant_slot < SOCK_ENCHANTMENT_SLOT+3; ++enchant_slot)
-        _player->ApplyEnchantment(itemTarget,EnchantmentSlot(enchant_slot),false);
-
-    for(int i = 0; i < 3; ++i)
-    {
-        if(GemEnchants[i])
-        {
-            itemTarget->SetEnchantment(EnchantmentSlot(SOCK_ENCHANTMENT_SLOT+i), GemEnchants[i],0,0);
-            pos = _player->GetPosByGuid(guids[i + 1]);
-            _player->DestroyItem((pos >> 8), (pos & 255), true );
-        }
-    }
-
-    for(uint32 enchant_slot = SOCK_ENCHANTMENT_SLOT; enchant_slot < SOCK_ENCHANTMENT_SLOT+3; ++enchant_slot)
-        _player->ApplyEnchantment(itemTarget,EnchantmentSlot(enchant_slot),true);
-    
-    SocketBonusToBeActivated = itemTarget->GemsFitSockets();    //current socketbonus state
-    if(SocketBonusActivated ^ SocketBonusToBeActivated)    //if there was a change...
-    {
-        _player->ApplyEnchantment(itemTarget,BONUS_ENCHANTMENT_SLOT,false);
-        itemTarget->SetEnchantment(BONUS_ENCHANTMENT_SLOT, (SocketBonusToBeActivated ? itemTarget->GetProto()->socketBonus : 0), 0, 0);
-        _player->ApplyEnchantment(itemTarget,BONUS_ENCHANTMENT_SLOT,true);
-        //it is not displayed, client has an inbuilt system to determine if the bonus is activated
-    }
-
-    _player->ToggleMetaGemsActive(slot, true);    //turn on all metagems (except for target item)
-}
-
-void WorldSession::HandleCancelTempItemEnchantmentOpcode(WorldPacket& recv_data)
-{
-    sLog.outDebug("WORLD: CMSG_CANCEL_TEMP_ITEM_ENCHANTMENT");
-
-    CHECK_PACKET_SIZE(recv_data,4);
-
-    uint32 eslot;
-    
-    recv_data >> eslot;
-
-    // apply only to equipped item
-    if(!Player::IsEquipmentPos(INVENTORY_SLOT_BAG_0,eslot))
-        return;
-
-    Item* item = GetPlayer()->GetItemByPos(INVENTORY_SLOT_BAG_0, eslot);
-
-    if(!item)
-        return;
-
-    if(!item->GetEnchantmentId(TEMP_ENCHANTMENT_SLOT))
-        return;
-
-    GetPlayer()->ApplyEnchantment(item,TEMP_ENCHANTMENT_SLOT,false);
-    item->ClearEnchantment(TEMP_ENCHANTMENT_SLOT);
 }

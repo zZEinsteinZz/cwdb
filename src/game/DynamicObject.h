@@ -33,23 +33,24 @@ class DynamicObject : public WorldObject
         bool Create(uint32 guidlow, Unit *caster, uint32 spellId, uint32 effIndex, float x, float y, float z, int32 duration, float radius);
         void Update(uint32 p_time);
         void Delete();
+        bool isFinished() {return deleteThis;}
         uint32 GetSpellId() const { return m_spellId; }
         uint32 GetEffIndex() const { return m_effIndex; }
         uint32 GetDuration() const { return m_aliveDuration; }
-        uint64 GetCasterGUID() const { return m_casterGuid; }
-        Unit* GetCaster() const;
+        Unit* GetCaster() const { return m_caster; }
         float GetRadius() const { return m_radius; }
         bool IsAffecting(Unit *unit) const { return m_affected.find(unit) != m_affected.end(); }
         void AddAffected(Unit *unit) { m_affected.insert(unit); }
         void RemoveAffected(Unit *unit) { m_affected.erase(unit); }
         void Delay(int32 delaytime);
-        bool isVisibleForInState(Player const* u, bool inVisibleList) const;
+
     protected:
-        uint64 m_casterGuid;
+        Unit* m_caster;
         uint32 m_spellId;
         uint32 m_effIndex;
         int32 m_aliveDuration;
         time_t m_nextThinkTime;
+        bool deleteThis;
         float m_radius;
         AffectedSet m_affected;
 };

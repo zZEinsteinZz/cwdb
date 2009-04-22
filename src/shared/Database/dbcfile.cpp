@@ -25,10 +25,9 @@
 DBCFile::DBCFile()
 {
     data = NULL;
-    fieldsOffset = NULL;
 }
 
-bool DBCFile::Load(const char *filename, const char *fmt)
+bool DBCFile::Load(const char *filename)
 {
 
     uint32 header;
@@ -51,16 +50,7 @@ bool DBCFile::Load(const char *filename, const char *fmt)
     fread(&recordSize,4,1,f);                               // Size of a record
     fread(&stringSize,4,1,f);                               // String size
 
-    fieldsOffset = new uint32[fieldCount];
-    fieldsOffset[0] = 0;
-    for(uint32 i = 1; i < fieldCount; i++)
-    {
-        fieldsOffset[i] = fieldsOffset[i - 1];
-        if (fmt[i - 1] == 'b' || fmt[i - 1] == 'X')         // byte fields
-            fieldsOffset[i] += 1;
-        else                                                // 4 byte fields (int32/float/strings)
-            fieldsOffset[i] += 4;
-    }
+    if(fieldCount*4 != recordSize) return false;            // internal file structure check
 
     data = new unsigned char[recordSize*recordCount+stringSize];
     stringTable = data + recordSize*recordCount;
@@ -73,8 +63,6 @@ DBCFile::~DBCFile()
 {
     if(data)
         delete [] data;
-    if(fieldsOffset)
-        delete [] fieldsOffset;
 }
 
 DBCFile::Record DBCFile::getRecord(size_t id)
@@ -104,9 +92,6 @@ uint32 DBCFile::GetFormatRecordSize(const char * format,int32* index_pos)
                 i=x;
                 recordsize+=4;
                 break;
-            case FT_BYTE:
-                recordsize += 1;
-                break;
         }
 
     if(index_pos)
@@ -115,7 +100,7 @@ uint32 DBCFile::GetFormatRecordSize(const char * format,int32* index_pos)
     return recordsize;
 }
 
-void * DBCFile::AutoProduceData(const char * format, uint32 * records, char *&_data)
+void * DBCFile::AutoProduceData(const char * format, uint32 * records)
 {
     /*
     format STRING, NA, FLOAT,NA,INT <=>
@@ -127,9 +112,8 @@ void * DBCFile::AutoProduceData(const char * format, uint32 * records, char *&_d
 
     this func will generate  entry[rows] data;
     */
-
     typedef char * ptr;
-    //char * _data;
+    char * _data;
     ptr* table;
     uint32 offset=0;
 
@@ -150,8 +134,8 @@ void * DBCFile::AutoProduceData(const char * format, uint32 * records, char *&_d
             if(ind>maxi)maxi=ind;
         }
 
-        maxi++;
         *records=maxi;
+        maxi++;
         table=new ptr[maxi];
         memset(table,0,maxi*sizeof(ptr));
     }else
@@ -160,9 +144,7 @@ void * DBCFile::AutoProduceData(const char * format, uint32 * records, char *&_d
         table = new ptr [recordCount];
     }
 
-    _data= new char[recordCount*recordsize + stringSize];
-    char *stringData = _data+recordCount*recordsize;
-    memcpy(stringData,stringTable,stringSize);
+    _data= new char[recordCount *recordsize];
 
     for(uint32 y =0;y<recordCount;y++)
     {
@@ -184,13 +166,12 @@ void * DBCFile::AutoProduceData(const char * format, uint32 * records, char *&_d
                     *((uint32*)(&_data[offset]))=getRecord(y).getUInt (x);
                     offset+=4;
                     break;
-                case FT_BYTE:
-                    *((uint8*)(&_data[offset]))=getRecord(y).getUInt8 (x);
-                    offset+=1;
                     break;
                 case FT_STRING:
-                    const char * st = getRecord(y).getString(x);
-                    *((char**)(&_data[offset]))=stringData+(st-(const char*)stringTable);
+                    uint32 l=strlen(getRecord(y).getString  (x))+1;
+                    char * st=new char[l];
+                    memcpy(st,getRecord(y).getString  (x),l);
+                    *((char**)(&_data[offset]))=st;
                     offset+=sizeof(char*);
                     break;
             }

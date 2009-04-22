@@ -26,11 +26,28 @@
 #include "Transports.h"
 #include "GridDefines.h"
 #include "MapInstanced.h"
-#include "DestinationHolderImp.h"
 
 #define CLASS_LOCK MaNGOS::ClassLevelLockable<MapManager, ZThread::Mutex>
 INSTANTIATE_SINGLETON_2(MapManager, CLASS_LOCK);
 INSTANTIATE_CLASS_MUTEX(MapManager, ZThread::Mutex);
+
+static void grid_compression(const char *src_tbl, const char *dest_tbl)
+{
+    sDatabase.PExecute("TRUNCATE `%s`", dest_tbl);
+
+    sDatabase.PExecute("DROP INDEX `idx_search` ON `%s`", dest_tbl);
+
+    // used FLOOR instead ROUND: ROUND have different semmantic for yyy.5 case dependent from mySQL version/OS C-library
+    sDatabase.PExecute(
+        "INSERT INTO `%s` (`guid`,`map`,`position_x`,`position_y`,`cell_position_x`,`cell_position_y` ) "
+        "SELECT `guid`,`map`,FLOOR(((`position_x`-'%f')/'%f') + '%u' + '0.5'),FLOOR(((`position_y`-'%f')/'%f') + '%u' + '0.5'),"
+        "FLOOR(((`position_x`-'%f')/'%f') + '%u' + '0.5'),FLOOR(((`position_y`-'%f')/'%f') + '%u' + '0.5')  FROM `%s`",
+        dest_tbl, CENTER_GRID_OFFSET, SIZE_OF_GRIDS, CENTER_GRID_ID, CENTER_GRID_OFFSET,SIZE_OF_GRIDS, CENTER_GRID_ID,
+        CENTER_GRID_CELL_OFFSET,SIZE_OF_GRID_CELL, CENTER_GRID_CELL_ID, CENTER_GRID_CELL_OFFSET, SIZE_OF_GRID_CELL,
+        CENTER_GRID_CELL_ID, src_tbl);
+    sDatabase.PExecute("UPDATE `%s` SET `grid`=(`position_x`*'%u') + `position_y`,`cell`=((`cell_position_y` * '%u') + `cell_position_x`)", dest_tbl, MAX_NUMBER_OF_GRIDS, TOTAL_NUMBER_OF_CELLS_PER_MAP);
+    sDatabase.PExecute("CREATE INDEX `idx_search` ON `%s` (`grid`,`cell`,`map`)", dest_tbl);
+}
 
 MapManager::MapManager() : i_gridCleanUpDelay(sWorld.getConfig(CONFIG_INTERVAL_GRIDCLEAN))
 {
@@ -42,8 +59,12 @@ MapManager::~MapManager()
     for(MapMapType::iterator iter=i_maps.begin(); iter != i_maps.end(); ++iter)
         delete iter->second;
 
-    for(TransportSet::iterator i = m_Transports.begin(); i != m_Transports.end(); ++i)
-        delete *i;
+    for(size_t i = 0; i < m_Transports.size(); i++)
+        delete m_Transports[i];
+
+    sDatabase.PExecute("TRUNCATE table `creature_grid`");
+    sDatabase.PExecute("TRUNCATE table `gameobject_grid`");
+    sDatabase.PExecute("TRUNCATE table `corpse_grid`");
 
     Map::DeleteStateMachine();
 }
@@ -52,6 +73,13 @@ void
 MapManager::Initialize()
 {
     Map::InitStateMachine();
+
+    sLog.outDebug("Grid compression apply on creature(s) ...");
+    grid_compression("creature", "creature_grid");
+    sLog.outDebug("Grid compression apply on gameobject(s) ...");
+    grid_compression("gameobject", "gameobject_grid");
+    sLog.outDebug("Grid compression apply on corpse(s)/bone(s) ...");
+    grid_compression("corpse", "corpse_grid");
 
     InitMaxInstanceId();
 }
@@ -99,7 +127,7 @@ bool MapManager::CanPlayerEnter(uint32 mapid, Player* player)
 void MapManager::RemoveBonesFromMap(uint32 mapid, uint64 guid, float x, float y)
 {
     bool remove_result = GetBaseMap(mapid)->RemoveBones(guid, x, y);
-
+    
     if (!remove_result)
     {
         sLog.outDebug("Bones %u not found in world. Delete from DB also.", GUID_LOPART(guid));
@@ -118,7 +146,7 @@ MapManager::Update(time_t diff)
 
     ObjectAccessor::Instance().Update(i_timer.GetCurrent());
     FlightMaster::Instance().FlightReportUpdate(i_timer.GetCurrent());
-    for (TransportSet::iterator iter = m_Transports.begin(); iter != m_Transports.end(); ++iter)
+    for (vector<Transport*>::iterator iter = m_Transports.begin(); iter != m_Transports.end(); iter++)
         (*iter)->Update(i_timer.GetCurrent());
 
     i_timer.SetCurrent(0);
@@ -174,3 +202,4 @@ void MapManager::InitMaxInstanceId()
         delete result;
     }
 }
+

@@ -29,14 +29,13 @@
 #include "ObjectAccessor.h"
 
 /* differeces from off:
-    -you can uninvite yourself - is is useful
+    -you can uninvite yourself
     -you can accept invitation even if leader went offline
 */
 /* todo:
     -group_destroyed msg is sent but not shown
     -reduce xp gaining when in raid group
     -quest sharing has to be corrected
-    -FIX sending PartyMemberStats
 */
 void WorldSession::SendPartyResult(uint32 unk, std::string member, uint32 state)
 {
@@ -81,12 +80,7 @@ void WorldSession::HandleGroupInviteOpcode( WorldPacket & recv_data )
     if(!group)
     {
         group = new Group;
-        if(!group->Create(GetPlayer()->GetGUID(), GetPlayer()->GetName()))
-        {
-            delete group;
-            return;
-        }
-
+        group->Create(GetPlayer()->GetGUID(), GetPlayer()->GetName());
         objmgr.AddGroup(group);
         newGroup = true;
     }
@@ -112,7 +106,7 @@ void WorldSession::HandleGroupInviteOpcode( WorldPacket & recv_data )
             group->Disband(true);
             objmgr.RemoveGroup(group);
             delete group;
-            player->groupInfo.group = NULL;
+            group = NULL;
         }
 
         if(player->groupInfo.group || player->groupInfo.invite)
@@ -130,8 +124,7 @@ void WorldSession::HandleGroupInviteOpcode( WorldPacket & recv_data )
     /********************/
 
     // everything's fine, do it
-    if(!group->AddInvite(player))
-        return;
+    group->AddInvite(player);
 
     WorldPacket data(SMSG_GROUP_INVITE, 10);                // guess size
     data << GetPlayer()->GetName();
@@ -152,9 +145,7 @@ void WorldSession::HandleGroupAcceptOpcode( WorldPacket & recv_data )
 
     // everything's fine, do it
     group->RemoveInvite(GetPlayer());
-    if(!group->AddMember(GetPlayer()->GetGUID(), GetPlayer()->GetName()))
-        return;
-
+    group->AddMember(GetPlayer()->GetGUID(), GetPlayer()->GetName());
     GetPlayer()->groupInfo.group  = group;
 }
 
@@ -177,7 +168,7 @@ void WorldSession::HandleGroupDeclineOpcode( WorldPacket & recv_data )
         group->Disband(true);
         objmgr.RemoveGroup(group);
         delete group;
-        GetPlayer()->groupInfo.group = NULL;
+        group = NULL;
     }
 
     GetPlayer()->groupInfo.invite = NULL;
@@ -211,7 +202,7 @@ void WorldSession::HandleGroupUninviteNameOpcode(WorldPacket & recv_data)
         return;
     normalizePlayerName(membername);
 
-    uint64 guid = objmgr.GetPlayerGUIDByName(membername);
+    uint64 guid = objmgr.GetPlayerGUIDByName(membername.c_str());
 
     // player not found
     if(!guid)
@@ -243,11 +234,28 @@ void WorldSession::HandleGroupUninvite(uint64 guid, std::string name)
     /********************/
 
     // everything's fine, do it
-
     if(player && player->groupInfo.invite)                  // uninvite invitee
-        player->UninviteFromGroup();
+    {
+        group->RemoveInvite(player);
+
+        if(group->GetMembersCount() <= 1)                   // group has just 1 member => disband
+        {
+            group->Disband(true);
+            objmgr.RemoveGroup(group);
+            delete group;
+            group = NULL;
+        }
+    }
     else                                                    // uninvite member
-        Player::RemoveFromGroup(group,guid);
+    {
+        if (group->RemoveMember(guid, 1) <= 1)
+        {
+            group->Disband();
+            objmgr.RemoveGroup(group);
+            delete group;
+            group = NULL;
+        }
+    }
 }
 
 void WorldSession::HandleGroupSetLeaderOpcode( WorldPacket & recv_data )
@@ -283,7 +291,13 @@ void WorldSession::HandleGroupDisbandOpcode( WorldPacket & recv_data )
     // everything's fine, do it
     SendPartyResult(2, GetPlayer()->GetName(), 0);
 
-    GetPlayer()->RemoveFromGroup();
+    Group *group = GetPlayer()->groupInfo.group;
+    if(group->RemoveMember(GetPlayer()->GetGUID(), 0) <= 1)
+    {
+        group->Disband();
+        objmgr.RemoveGroup(group);
+        delete group;
+    }
 }
 
 void WorldSession::HandleLootMethodOpcode( WorldPacket & recv_data )
@@ -294,9 +308,8 @@ void WorldSession::HandleLootMethodOpcode( WorldPacket & recv_data )
         return;
 
     uint32 lootMethod;
-    uint32 lootThreshold;
     uint64 lootMaster;
-    recv_data >> lootMethod >> lootMaster >> lootThreshold;
+    recv_data >> lootMethod >> lootMaster;
 
     Group *group = GetPlayer()->groupInfo.group;
 
@@ -308,7 +321,6 @@ void WorldSession::HandleLootMethodOpcode( WorldPacket & recv_data )
     // everything's fine, do it
     group->SetLootMethod((LootMethod)lootMethod);
     group->SetLooterGuid(lootMaster);
-    group->SetLootThreshold((LootThreshold)lootThreshold);
     group->SendUpdate();
 }
 
@@ -454,7 +466,7 @@ void WorldSession::HandleGroupChangeSubGroupOpcode( WorldPacket & recv_data )
     recv_data >> groupNr;
 
     Group *group = GetPlayer()->groupInfo.group;
-    uint64 guid = objmgr.GetPlayerGUIDByName(name);
+    uint64 guid = objmgr.GetPlayerGUIDByName(name.c_str());
 
     /** error handling **/
     if(!group->IsLeader(GetPlayer()->GetGUID()) && !group->IsAssistant(GetPlayer()->GetGUID()))
@@ -465,7 +477,7 @@ void WorldSession::HandleGroupChangeSubGroupOpcode( WorldPacket & recv_data )
     group->ChangeMembersGroup(guid, groupNr);
 }
 
-void WorldSession::HandleGroupAssistantOpcode( WorldPacket & recv_data )
+void WorldSession::HandleAssistantOpcode( WorldPacket & recv_data )
 {
     CHECK_PACKET_SIZE(recv_data,8+1);
 
@@ -485,31 +497,7 @@ void WorldSession::HandleGroupAssistantOpcode( WorldPacket & recv_data )
     /********************/
 
     // everything's fine, do it
-    group->SetAssistant(guid, (flag==0?false:true));
-}
-
-void WorldSession::HandleGroupPromoteOpcode( WorldPacket & recv_data )
-{
-    if(!GetPlayer()->groupInfo.group)
-        return;
-
-    uint8 flag;
-    uint64 guid;
-    recv_data >> flag;
-    recv_data >> guid;
-
-    Group *group = GetPlayer()->groupInfo.group;
-
-    /** error handling **/
-    if(!group->IsLeader(GetPlayer()->GetGUID()))
-        return;
-    /********************/
-
-    // everything's fine, do it
-    if(flag == 0)
-        group->SetMainTank(guid);
-    else if(flag == 1)
-        group->SetMainAssistant(guid);
+    group->ChangeAssistantFlag(guid, (flag==0?false:true));
 }
 
 void WorldSession::HandleRaidReadyCheckOpcode( WorldPacket & recv_data )
@@ -548,90 +536,38 @@ void WorldSession::HandleRaidReadyCheckOpcode( WorldPacket & recv_data )
     }
 }
 
-/*not called : this should server send when some member bits are changed:*/
-void WorldSession::SendPartyMemberStatsChanged( uint64 Guid )
-{                                               //todo FIX ME
-    //do nothing
-    return;
-
-    Player *player = objmgr.GetPlayer(Guid);
-    if(!player)
-        //if player is offline - then send nothing --- not fixed, we should send some info that player is offline!
-        return;
-
-    WorldPacket data(SMSG_PARTY_MEMBER_STATS, 30);
-
-    data.append(player->GetPackGUID());
-    /*we have to create update mask, not this way*/
-    uint32 mask = 7;                            //only sends info that member's HP changed
-    data << (uint32) mask;
-    if (mask & 1)
-        data << (uint8) MEMBER_STATUS_ONLINE;   //there should be member's online status
-    if (mask & 2)
-        data << (uint16) player->GetHealth();
-    if (mask & 4)
-        data << (uint16) player->GetMaxHealth();
-    Powers powerType = player->getPowerType();
-    if (mask & 8)                          //this mask bit is always 0
-        data << (uint8)  powerType;
-    if (mask & 16)
-        data << (uint16) player->GetMaxPower(powerType);
-    if (mask & 32)
-        data << (uint16) player->GetPower(powerType);
-    if (mask & 64)
-        data << (uint16) player->getLevel();
-    if (mask & 128)
-        data << (uint16) player->GetZoneId();
-    if (mask & 256)
-        data << (uint16) player->GetPositionX();
-    if (mask & 512)
-        data << (uint16) player->GetPositionY();
-    ///and some other things, like spells, pet name, pet HP, pet HP max should be send
-
-    SendPacket(&data);
-}
-
-/*this procedure handles clients CMSG_REQUEST_PARTY_MEMBER_STATS request*/
-void WorldSession::HandleRequestPartyMemberStatsOpcode( WorldPacket &recv_data )
+/*?*/void WorldSession::HandleRequestPartyMemberStatsOpcode( WorldPacket &recv_data )
 {
     CHECK_PACKET_SIZE(recv_data,8);
 
-    sLog.outDebug("WORLD RECIEVED CMSG_REQUEST_PARTY_MEMBER_STATS");
+    //sLog.outDebug("WORLD RECIEVE CMSG_REQUEST_PARTY_MEMBER_STATS");
     uint64 Guid;
     recv_data >> Guid;
-
+    return;
     Player *player = objmgr.GetPlayer(Guid);
     if(!player)
         return;
-    WorldPacket data(SMSG_PARTY_MEMBER_STATS_FULL, 30);
+
+    WorldPacket data(SMSG_PARTY_MEMBER_STATS, 30);
+    /*data << (uint16)0xFF << Guid;
+    data << (uint8)0;
+    data << (uint32)(player ? 1 : 0);*/
+
+    /*0000: 7e 00 xx xx xx xx ef 17 00 00 0b xx xx xx xx 01 : ~....M.......P..
+    0010: e8 03 01 00 6b 01 86 fd 38 ef 01 00 00 00 99 09 : ....k...8.......
+    0020: 01 00 86 20 00 -- -- -- -- -- -- -- -- -- -- -- : ... .*/
+
+    /*0000: 7e 00 xx xx xx xx 10 12 00 00 xx xx 01 00 00 00 : ~..D.N....;.....
+      0010: xx xx 00 -- -- -- -- -- -- -- -- -- -- -- -- -- : ...*/
+
+    /* mask: 0b0000 0000 - 0000 0000 - 0000 0000 - 0000 0000
+                       \ 
+                      cur_life*/
 
     data.append(player->GetPackGUID());
-    uint32 mask1 = 0x7FFC0BFF;                  //1111111111111000000101111111111
-                 //0x7FFC0BF7;                  //1111111111111000000101111110111
-                 //0x7FFC1BF7;                  //1111111111111000001101111110111
-                                                //1111111111111--not used in mask
-    Powers powerType = player->getPowerType();
-    data << (uint32) mask1;
-    data << (uint8)  MEMBER_STATUS_ONLINE;       //should be member's online status
-    data << (uint16) player->GetHealth();
-    data << (uint16) player->GetMaxHealth();
-    data << (uint8) powerType;
-    data << (uint16) player->GetMaxPower(powerType);
-    data << (uint16) player->GetPower(powerType);
-    data << (uint16) player->getLevel();
-    data << (uint16) player->GetZoneId();
-    data << (uint16) player->GetPositionX();
-    data << (uint16) player->GetPositionY();
-    ///some unknown parts, don't know how to divide it :
-    data << (uint32) 0;
-    data << (uint16) 0;
-    data << (uint8)  0;
-    data << (uint16) 0x00FF;
-    //ending packets
-    data << (uint32) 0;
-    // it should not be decimal constant ?!
-    //data << (uint32) 4278190080;                //0xFF000000
-    data << (uint32) 0xFF000000;                //0xFF000000
+    //data << (uint8)mask1 << (uint8)mask2;
+
+    data << (uint8)0x10 << (uint8)0x10 << (uint16)0 << (uint16) 21 << (uint32)1 << (uint16)24244 << (uint8)0;
     SendPacket(&data);
 }
 

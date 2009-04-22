@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright (C) 2005,2006,2007 MaNGOS <http://www.mangosproject.org/>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -29,7 +29,6 @@
 #include "ObjectAccessor.h"
 #include "Language.h"
 #include "SpellAuras.h"
-#include "AccountMgr.h"
 
 bool ChatHandler::ShowHelpForCommand(ChatCommand *table, const char* cmd)
 {
@@ -123,7 +122,14 @@ bool ChatHandler::HandleStartCommand(const char* args)
     }
 
     // cast spell Stuck
-    chr->CastSpell(chr,7355,false);
+    SpellEntry const* sInfo = sSpellStore.LookupEntry(7355);
+    if(!sInfo)
+        return true;
+
+    Spell *spell = new Spell(chr, sInfo , false, 0);
+    SpellCastTargets targets;
+    targets.setUnitTarget( chr );
+    spell->prepare(&targets);
     return true;
 }
 
@@ -141,6 +147,7 @@ bool ChatHandler::HandleInfoCommand(const char* args)
 
 bool ChatHandler::HandleDismountCommand(const char* args)
 {
+
     //If player is not mounted, so go out :)
     if (!m_session->GetPlayer( )->IsMounted())
     {
@@ -171,10 +178,9 @@ bool ChatHandler::HandleSaveCommand(const char* args)
         return true;
     }
 
-    // save or plan save after 20 sec (logout delay) if current next save time more this value and _not_ output any messages to prevent cheat planning
-    uint32 save_interval = sWorld.getConfig(CONFIG_INTERVAL_SAVE);
-    if(save_interval==0 || save_interval > 20*1000 && player->GetSaveTimer() <= save_interval - 20*1000)
-        player->SaveToDB();
+    // plan save after 20 sec (logout delay) if current next save time more this value and _not_ output any messages to prevent cheat planning
+    if(player->GetSaveTimer() > 20*1000)
+        player->SetSaveTimer(20*1000);
 
     return true;
 }
@@ -183,11 +189,11 @@ bool ChatHandler::HandleGMListCommand(const char* args)
 {
     bool first = true;
 
-    ObjectAccessor::PlayersMapType &m = ObjectAccessor::Instance().GetPlayers();
+    ObjectAccessor::PlayersMapType &m(ObjectAccessor::Instance().GetPlayers());
     for(ObjectAccessor::PlayersMapType::iterator itr = m.begin(); itr != m.end(); ++itr)
     {
         if( itr->second->GetSession()->GetSecurity() && (itr->second->isGameMaster() || sWorld.getConfig(CONFIG_GM_IN_GM_LIST) ) &&
-            itr->second->IsVisibleGloballyFor(m_session->GetPlayer()) )
+            itr->second->isVisibleFor(m_session->GetPlayer(),false) )
         {
             if(first)
             {
@@ -196,6 +202,7 @@ bool ChatHandler::HandleGMListCommand(const char* args)
             }
 
             SendSysMessage(itr->second->GetName());
+
         }
     }
 
@@ -207,14 +214,13 @@ bool ChatHandler::HandleGMListCommand(const char* args)
 
 bool ChatHandler::HandleShowHonor(const char* args)
 {
-/*
     uint32 dishonorable_kills       = m_session->GetPlayer()->GetUInt32Value(PLAYER_FIELD_LIFETIME_DISHONORABLE_KILLS);
     uint32 honorable_kills          = m_session->GetPlayer()->GetUInt32Value(PLAYER_FIELD_LIFETIME_HONORABLE_KILLS);
-    uint32 highest_rank             = (m_session->GetPlayer()->GetHonorHighestRank() < 16)? m_session->GetPlayer()->GetHonorHighestRank() : 0;
-    uint32 today_honorable_kills    = (uint16)m_session->GetPlayer()->GetUInt32Value(PLAYER_FIELD_TODAY_KILLS);
-    uint32 today_dishonorable_kills = (uint16)(m_session->GetPlayer()->GetUInt32Value(PLAYER_FIELD_TODAY_KILLS)>>16);
+    uint32 highest_rank             = (m_session->GetPlayer()->GetHonorHighestRank() < HONOR_RANK_COUNT)? m_session->GetPlayer()->GetHonorHighestRank() : 0;
+    uint32 today_honorable_kills    = (uint16)m_session->GetPlayer()->GetUInt32Value(PLAYER_FIELD_SESSION_KILLS);
+    uint32 today_dishonorable_kills = (uint16)(m_session->GetPlayer()->GetUInt32Value(PLAYER_FIELD_SESSION_KILLS)>>16);
     uint32 yesterday_kills          = m_session->GetPlayer()->GetUInt32Value(PLAYER_FIELD_YESTERDAY_KILLS);
-    uint32 yesterday_honor          = m_session->GetPlayer()->GetUInt32Value(PLAYER_FIELD_HONOR_YESTERDAY);
+    uint32 yesterday_honor          = m_session->GetPlayer()->GetUInt32Value(PLAYER_FIELD_YESTERDAY_CONTRIBUTION);
     uint32 this_week_kills          = m_session->GetPlayer()->GetUInt32Value(PLAYER_FIELD_THIS_WEEK_KILLS);
     uint32 this_week_honor          = m_session->GetPlayer()->GetUInt32Value(PLAYER_FIELD_THIS_WEEK_CONTRIBUTION);
     uint32 last_week_kills          = m_session->GetPlayer()->GetUInt32Value(PLAYER_FIELD_LAST_WEEK_KILLS);
@@ -287,15 +293,16 @@ bool ChatHandler::HandleShowHonor(const char* args)
     PSendSysMessage(LANG_HONOR_THIS_WEEK, this_week_kills, this_week_honor);
     PSendSysMessage(LANG_HONOR_LAST_WEEK, last_week_kills, last_week_honor, last_week_standing);
     PSendSysMessage(LANG_HONOR_LIFE, honorable_kills, dishonorable_kills, highest_rank, hrank_name);
-*/
+
     return true;
 }
 
 bool ChatHandler::HandlePasswordCommand(const char* args)
 {
     if(!*args)
+    {
         return false;
-
+    }
     char *old_pass = strtok ((char*)args, " ");
     char *new_pass = strtok (NULL, " ");
     char *new_pass_c  = strtok (NULL, " ");
@@ -309,21 +316,33 @@ bool ChatHandler::HandlePasswordCommand(const char* args)
 
     if (password_new.size() > 16)
     {
-        SendSysMessage(LANG_COMMAND_NOTCHANGEPASSWORD);
+        SendSysMessage("Your password cant be long then 16 charatcers (client limit), Password dont change!");
         return true;
     }
 
-    loginDatabase.escape_string(password_old);
-    loginDatabase.escape_string(password_new);
-    loginDatabase.escape_string(password_new_c);
-    QueryResult *result = loginDatabase.PQuery("SELECT 1 FROM `account` WHERE `id`='%d' AND `I`=SHA1(CONCAT(UPPER(`username`),':',UPPER('%s')))", m_session->GetAccountId(), password_old.c_str());
-    if(!result || password_new != password_new_c)
-        SendSysMessage(LANG_COMMAND_WRONGOLDPASSWORD);
-    else if(accmgr.ChangePassword(m_session->GetAccountId(), password_new) == 0)
-        SendSysMessage(LANG_COMMAND_PASSWORD);
-
+    QueryResult *result = loginDatabase.PQuery("SELECT `password` FROM `account` WHERE `id` = '%d'",m_session->GetAccountId());
     if(result)
+    {
+        // in result already encoded password
+        loginDatabase.escape_string(password_old);
+
+        if( (*result)[0].GetCppString()==password_old && password_new == password_new_c)
+        {
+            loginDatabase.escape_string(password_new);
+
+            if(loginDatabase.PExecute( "UPDATE `account` SET `password` = '%s' WHERE `id` = '%d';",password_new.c_str(), m_session->GetAccountId()))
+            {
+                SendSysMessage("The password is changed");
+                return true;
+            }
+        }
+        else
+        {
+            SendSysMessage("The new passwords do not match, or the wrong old password");
+        }
+
         delete result;
+    }
 
     return true;
 }
@@ -332,22 +351,22 @@ bool ChatHandler::HandleLockAccountCommand(const char* args)
 {
     if (!*args)
     {
-        SendSysMessage(LANG_COMMAND_ACCLOCKPARAMETER);
+        SendSysMessage("You must send parameter");
         return true;
     }
 
     std::string argstr = (char*)args;
     if (argstr == "on")
     {
-        loginDatabase.PExecute( "UPDATE `account` SET `locked` = '1' WHERE `id` = '%d'",m_session->GetAccountId());
-        PSendSysMessage(LANG_COMMAND_ACCLOCKLOCKED);
+        loginDatabase.PExecute( "UPDATE `account` SET `locked` = '1' WHERE `id` = '%d';",m_session->GetAccountId());
+        PSendSysMessage("Your account now is locked");
         return true;
     }
 
     if (argstr == "off")
     {
-        loginDatabase.PExecute( "UPDATE `account` SET `locked` = '0' WHERE `id` = '%d'",m_session->GetAccountId());
-        PSendSysMessage(LANG_COMMAND_ACCLOCKUNLOCKED);
+        loginDatabase.PExecute( "UPDATE `account` SET `locked` = '0' WHERE `id` = '%d';",m_session->GetAccountId());
+        PSendSysMessage("Your account now is unlocked");
         return true;
     }
     else

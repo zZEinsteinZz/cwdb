@@ -23,7 +23,7 @@
 
 #ifndef _VERSION
 #if PLATFORM == PLATFORM_WIN32
-# define _VERSION "0.7"
+# define _VERSION "0.7-SVN"
 #else
 # define _VERSION "@VERSION@"
 #endif
@@ -32,10 +32,10 @@
 // Format is YYYYMMDDRR where RR is the change in the conf file
 // for that day.
 #ifndef _MANGOSDCONFVERSION
-# define _MANGOSDCONFVERSION 2007062001
+# define _MANGOSDCONFVERSION 2006060401
 #endif
 #ifndef _REALMDCONFVERSION
-# define _REALMDCONFVERSION 2007062001
+# define _REALMDCONFVERSION 2006060401
 #endif
 
 #if PLATFORM == PLATFORM_WIN32
@@ -44,8 +44,8 @@
 # define _REALMD_CONFIG   "realmd.conf"
 #else
 # define _FULLVERSION "/" _VERSION " (Unix)"
-# define _MANGOSD_CONFIG  "../etc/mangosd.conf"
-# define _REALMD_CONFIG  "../etc/realmd.conf"
+# define _MANGOSD_CONFIG  "@MANGOSD_CONFIG@"
+# define _REALMD_CONFIG  "@REALMD_CONFIG@"
 #endif
 
 #define DEFAULT_PLAYER_LIMIT 100

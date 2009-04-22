@@ -23,12 +23,10 @@
 
 enum
 {
-    FT_NA='x',                                              //not used or unknown, 4 byte size
-    FT_NA_BYTE='X',                                         //not used or unknown, byte
+    FT_NA='x',                                              //not used or unknown
     FT_STRING='s',                                          //char*
     FT_FLOAT='f',                                           //float
     FT_INT='i',                                             //uint32
-    FT_BYTE='b',                                            //uint8
     FT_SORT='d',                                            //sorted by this field, field is not included
     FT_IND='n'                                              //the same,but parsed to data
 };
@@ -39,7 +37,7 @@ class DBCFile
         DBCFile();
         ~DBCFile();
 
-        bool Load(const char *filename, const char *fmt);
+        bool Load(const char *filename);
 
         class Record
         {
@@ -47,17 +45,12 @@ class DBCFile
                 float getFloat(size_t field) const
                 {
                     assert(field < file.fieldCount);
-                    return *reinterpret_cast<float*>(offset+file.GetOffset(field));
+                    return *reinterpret_cast<float*>(offset+field*4);
                 }
                 uint32 getUInt(size_t field) const
                 {
                     assert(field < file.fieldCount);
-                    return *reinterpret_cast<uint32*>(offset+file.GetOffset(field));
-                }
-                uint8 getUInt8(size_t field) const
-                {
-                    assert(field < file.fieldCount);
-                    return *reinterpret_cast<uint8*>(offset+file.GetOffset(field));
+                    return *reinterpret_cast<uint32*>(offset+field*4);
                 }
 
                 const char *getString(size_t field) const
@@ -83,9 +76,8 @@ class DBCFile
 
         uint32 GetNumRows() const { return recordCount;}
         uint32 GetCols() const { return fieldCount; }
-        uint32 GetOffset(size_t id) const { return (fieldsOffset != NULL && id < fieldCount) ? fieldsOffset[id] : 0; }
         bool IsLoaded() {return (data!=NULL);}
-        void *AutoProduceData(const char*, uint32 *, char *&);
+        void *AutoProduceData(const char*, uint32 *);
         static uint32 GetFormatRecordSize(const char * format, int32 * index_pos = NULL);
     private:
 
@@ -93,7 +85,6 @@ class DBCFile
         uint32 recordCount;
         uint32 fieldCount;
         uint32 stringSize;
-        uint32 *fieldsOffset;
         unsigned char *data;
         unsigned char *stringTable;
 };

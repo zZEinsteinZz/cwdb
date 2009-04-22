@@ -64,9 +64,6 @@ DatabaseMysql::~DatabaseMysql()
 
 bool DatabaseMysql::Initialize(const char *infoString)
 {
-    if(!Database::Initialize(infoString))
-        return false;
-
     tranThread = NULL;
     MYSQL *mysqlInit;
     mysqlInit = mysql_init(NULL);
@@ -179,8 +176,8 @@ QueryResult* DatabaseMysql::Query(const char *sql)
 
         if(mysql_query(mMysql, sql))
         {
-            sLog.outErrorDb( "SQL: %s", sql );
-            sLog.outErrorDb("query ERROR: %s", mysql_error(mMysql));
+            sLog.outError( "SQL: %s", sql );
+            sLog.outError("query ERROR: %s", mysql_error(mMysql));
             return NULL;
         }
         else
@@ -222,8 +219,8 @@ bool DatabaseMysql::Execute(const char *sql)
 
         if(mysql_query(mMysql, sql))
         {
-            sLog.outErrorDb("SQL: %s", sql);
-            sLog.outErrorDb("SQL ERROR: %s", mysql_error(mMysql));
+            sLog.outError("SQL: %s", sql);
+            sLog.outError("SQL ERROR: %s", mysql_error(mMysql));
             return false;
         }
         else
@@ -278,7 +275,7 @@ bool DatabaseMysql::BeginTransaction()
     if (tranThread==ZThread::ThreadImpl::current())
         return false;                                       // huh? this thread already started transaction
     mMutex.acquire();
-    if (!_TransactionCmd("START TRANSACTION"))
+    if (!_TransactionCmd("BEGIN"))
     {
         mMutex.release();                                   // can't start transaction
         return false;

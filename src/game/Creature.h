@@ -49,7 +49,7 @@ enum Gossip_Option
     GOSSIP_OPTION_INNKEEPER         = 8,                    //UNIT_NPC_FLAG_INNKEEPER         = 128,
     GOSSIP_OPTION_BANKER            = 9,                    //UNIT_NPC_FLAG_BANKER            = 256,
     GOSSIP_OPTION_PETITIONER        = 10,                   //UNIT_NPC_FLAG_PETITIONER        = 512,
-    GOSSIP_OPTION_TABARDDESIGNER    = 11,                   //UNIT_NPC_FLAG_TABARDDESIGNER    = 1024,
+    GOSSIP_OPTION_TABARDVENDOR      = 11,                   //UNIT_NPC_FLAG_TABARDVENDOR      = 1024,
     GOSSIP_OPTION_BATTLEFIELD       = 12,                   //UNIT_NPC_FLAG_BATTLEFIELDPERSON = 2048,
     GOSSIP_OPTION_AUCTIONEER        = 13,                   //UNIT_NPC_FLAG_AUCTIONEER        = 4096,
     GOSSIP_OPTION_STABLEPET         = 14,                   //UNIT_NPC_FLAG_STABLE            = 8192,
@@ -103,21 +103,6 @@ enum Gossip_Guard_Skill
     GOSSIP_GUARD_SKILL_ENGINERING   = 91
 };
 
-enum ReactStates
-{
-    REACT_PASSIVE    = 0,
-    REACT_DEFENSIVE  = 1,
-    REACT_AGGRESSIVE = 2
-};
-
-enum CommandStates
-{
-    COMMAND_STAY    = 0,
-    COMMAND_FOLLOW  = 1,
-    COMMAND_ATTACK  = 2,
-    COMMAND_ABANDON = 3
-};
-
 struct GossipOption
 {
     uint32 Id;
@@ -156,7 +141,6 @@ struct TrainerSpell
 #pragma pack(push,1)
 #endif
 
-// from `creature_template` table
 struct CreatureInfo
 {
     uint32  Entry;
@@ -181,6 +165,7 @@ struct CreatureInfo
     uint32  baseattacktime;
     uint32  rangeattacktime;
     uint32  Flags;
+    uint32  mount;
     uint32  dynamicflags;
     float   size;
     uint32  family;
@@ -222,52 +207,13 @@ struct CreatureInfo
     uint32 randomDisplayID() const;
 };
 
-// from `creature` table
-struct CreatureData
-{
-    uint32 id;                                              // entry in creature_template
-    uint32 mapid;
-    float posX;
-    float posY;
-    float posZ;
-    float orientation;
-    uint32 spawntimesecs;
-    float spawndist;
-    uint32 currentwaypoint;
-    float spawn_posX;
-    float spawn_posY;
-    float spawn_posZ;
-    float spawn_orientation;
-    uint32 curhealth;
-    uint32 curmana;
-    uint8 deathState;
-    uint8 movementType;
-    std::string auras;
-};
-
-// from `creature_addon` table
-struct CreatureDataAddon
-{
-    uint32 guid;
-    uint32 RefId;
-    uint32 mount;
-    uint32 bytes0;
-    uint32 bytes1;
-    uint32 bytes2;
-    uint32 emote;
-    uint32 aura;
-    uint32 auraflags;
-    uint32 auralevels;
-    uint32 auraapplications;
-    uint32 aurastate;
-};
-
 enum InhabitTypeValues
 {
     INHAVIT_GROUND = 1,
     INHAVIT_WATER  = 2,
     INHAVIT_ANYWHERE = INHAVIT_GROUND | INHAVIT_WATER
 };
+
 
 #if defined( __GNUC__ ) && (GCC_MAJOR < 4 || GCC_MAJOR == 4 && GCC_MINOR < 1)
 #pragma pack()
@@ -281,7 +227,7 @@ typedef std::list<GossipOption> GossipOptionList;
 #define CREATURE_Z_ATTACK_RANGE 3
 #define CREATURE_THREAT_RADIUS 10000.0f
 
-#define MAX_VENDOR_ITEMS 255                                // Limitation in item count field size in SMSG_LIST_INVENTORY
+#define MAX_CREATURE_ITEMS 128
 
 class MANGOS_DLL_SPEC Creature : public Unit
 {
@@ -295,9 +241,10 @@ class MANGOS_DLL_SPEC Creature : public Unit
 
         void CleanupCrossRefsBeforeDelete();                // used in ~Creature (or before mass creature delete to remove cross-references to already deleted creature)
 
+        typedef std::list<TrainerSpell*> SpellsList;
+
         bool Create (uint32 guidlow, uint32 mapid, float x, float y, float z, float ang, uint32 Entry);
         bool CreateFromProto(uint32 guidlow,uint32 Entry);
-        bool LoadCreaturesAddon();
         void SelectLevel(const CreatureInfo *cinfo);
 
         uint32 GetDBTableGUIDLow() const { return m_DBTableGuid; }
@@ -308,7 +255,6 @@ class MANGOS_DLL_SPEC Creature : public Unit
         void GetRespawnDist(float &d) const { d = m_respawnradius; }
 
         bool isPet() const { return m_isPet; }
-        void SetRespawnCoord(float x, float y, float z) { respawn_cord[0] = x; respawn_cord[1] = y; respawn_cord[2] = z; }
         bool isTotem() const { return m_isTotem; }
         bool isCivilian() const { return GetCreatureInfo()->civilian != 0; }
         bool isCanSwimOrFly() const { return GetCreatureInfo()->InhabitType & INHAVIT_WATER; }
@@ -335,20 +281,19 @@ class MANGOS_DLL_SPEC Creature : public Unit
             return GetCreatureInfo()->rank == CREATURE_ELITE_WORLDBOSS;
         }
 
-        void AIM_Initialize();
+        void AIM_Initialize(void);
         MotionMaster* operator->(void) { return &i_motionMaster; }
 
-        void AI_SendMoveToPacket(float x, float y, float z, uint32 time, bool run, uint8 type);
-        CreatureAI* AI() { return i_AI; }
+        void AI_SendMoveToPacket(float x, float y, float z, uint32 time, bool run, bool WalkBack);
+        inline CreatureAI &AI(void) { return *i_AI; }
 
-        void setMoveRunFlag(bool f) { m_moveRun = f; }
-        bool getMoveRunFlag() const { return m_moveRun; }
-        bool IsStopped() const { return !(hasUnitState(UNIT_STAT_MOVING)); }
-        void StopMoving()
+        inline void setMoveRunFlag(bool f) { m_moveRun = f; }
+        inline bool getMoveRunFlag() { return m_moveRun; }
+        inline bool IsStopped(void) const { return !(hasUnitState(UNIT_STAT_MOVING)); }
+        inline void StopMoving(void)
         {
             clearUnitState(UNIT_STAT_MOVING);
-            // send explicit stop packet
-            SendMonsterMove(GetPositionX(), GetPositionY(), GetPositionZ(),0,true,0);
+            AI_SendMoveToPacket(GetPositionX(), GetPositionY(), GetPositionZ(), 0, true, false);
         }
 
         uint32 GetBlockValue() const                        //dunno mob block value
@@ -359,26 +304,23 @@ class MANGOS_DLL_SPEC Creature : public Unit
         /*********************************************************/
         /***                    VENDOR SYSTEM                  ***/
         /*********************************************************/
-        void LoadGoods();                                   // must be called before access to vendor items, lazy loading at first call
-        void ReloadGoods() { m_itemsLoaded = false; LoadGoods(); }
-
         CreatureItem* GetItem(uint32 slot)
         {
-            if(slot>=m_vendor_items.size()) return NULL;
-            return &m_vendor_items[slot];
+            if(slot>=m_item_list.size()) return NULL;
+            return &m_item_list[slot];
         }
-        uint8 GetItemCount() const { return m_vendor_items.size(); }
+        uint8 GetItemCount() const { return m_item_list.size(); }
         void AddItem( uint32 item, uint32 maxcount, uint32 ptime)
         {
-            m_vendor_items.push_back(CreatureItem(item,maxcount,ptime));
+            m_item_list.push_back(CreatureItem(item,maxcount,ptime));
         }
         bool RemoveItem( uint32 item_id )
         {
-            for(CreatureItems::iterator i = m_vendor_items.begin(); i != m_vendor_items.end(); ++i )
+            for(CreatureItems::iterator i = m_item_list.begin(); i != m_item_list.end(); ++i )
             {
                 if(i->id==item_id)
                 {
-                    m_vendor_items.erase(i);
+                    m_item_list.erase(i);
                     return true;
                 }
             }
@@ -386,22 +328,18 @@ class MANGOS_DLL_SPEC Creature : public Unit
         }
         CreatureItem* FindItem(uint32 item_id)
         {
-            for(CreatureItems::iterator i = m_vendor_items.begin(); i != m_vendor_items.end(); ++i )
+            for(CreatureItems::iterator i = m_item_list.begin(); i != m_item_list.end(); ++i )
                 if(i->id==item_id)
                     return &*i;
             return NULL;
         }
 
-        /*********************************************************/
-        /***                    TRAINER SYSTEM                 ***/
-        /*********************************************************/
-        typedef std::list<TrainerSpell> SpellsList;
-        void LoadTrainerSpells();                                   // must be called before access to trainer spells, lazy loading at first call
-        void ReloadTrainerSpells() { m_trainerSpellsLoaded = false; LoadTrainerSpells(); }
-        SpellsList const& GetTrainerSpells() const { return m_trainer_spells; }
-        uint32 GetTrainerType() const { return m_trainer_type; }
-
         CreatureInfo const *GetCreatureInfo() const;
+
+        void CreateTrainerSpells();
+        uint32 GetTrainerSpellsSize() const { return m_tspells.size(); }
+        std::list<TrainerSpell*>::iterator GetTspellsBegin(){ return m_tspells.begin(); }
+        std::list<TrainerSpell*>::iterator GetTspellsEnd(){ return m_tspells.end(); }
 
         uint32 getDialogStatus(Player *pPlayer, uint32 defstatus);
 
@@ -422,7 +360,10 @@ class MANGOS_DLL_SPEC Creature : public Unit
 
         void setDeathState(DeathState s);                   // overwrite virtual Unit::setDeathState
 
-        bool LoadFromDB(uint32 guid, uint32 InstanceId);
+        void Say(char const* text, uint32 language);
+        void MonsterSay(char const *text, uint32 language, uint64 targetGUID);
+
+        bool LoadFromDB(uint32 guid, QueryResult *result, uint32 InstanceId);
         virtual void SaveToDB();                            // overwrited in Pet
         virtual void DeleteFromDB();                        // overwrited in Pet
 
@@ -454,30 +395,19 @@ class MANGOS_DLL_SPEC Creature : public Unit
 
         bool IsVisibleInGridForPlayer(Player* pl) const;
 
-        void RemoveCorpse();
-
         void SetRespawnTime(uint32 respawn) { m_respawnTime = respawn ? time(NULL) + respawn : 0; }
         void Respawn();
         void SaveRespawnTime();
+        
+        void LoadFlagRelatedData();
 
         uint32 m_groupLootTimer;                            // (msecs)timer used for group loot
         uint64 lootingGroupLeaderGUID;                      // used to find group which is looting corpse
 
-        void SendZoneUnderAttackMessage(Player* attacker);
-
-        bool hasQuest(uint32 quest_id) const;
-        bool hasInvolvedQuest(uint32 quest_id)  const;
     protected:
-        // vendor items
-        typedef std::vector<CreatureItem> CreatureItems;
-        CreatureItems m_vendor_items;
-        bool m_itemsLoaded;                                 // vendor items loading state
-
-        // trainer spells
-        bool m_trainerSpellsLoaded;                         // trainer spells loading state
-        SpellsList m_trainer_spells;
-        uint32 m_trainer_type;                              // trainer type based at trainer spells, can be different from creature_template value.
-                                                            // req. for correct show non-prof. trainers like weaponmaster.
+        void _LoadGoods();
+        void _LoadQuests();
+        void _LoadMovement();
         void _RealtimeSetCreatureInfo();
 
         float _GetHealthMod(int32 Rank);
@@ -493,9 +423,12 @@ class MANGOS_DLL_SPEC Creature : public Unit
         uint32 m_corpseDelay;                               // (secs) delay between death and corpse disappearance
         float m_respawnradius;
 
-        bool m_gossipOptionLoaded;
+        typedef std::vector<CreatureItem> CreatureItems;
+        CreatureItems m_item_list;
+
+        SpellsList m_tspells;
+
         GossipOptionList m_goptions;
-        uint32 m_NPCTextId;                                 // cached value
 
         float respawn_cord[3];
         bool m_moveRun;

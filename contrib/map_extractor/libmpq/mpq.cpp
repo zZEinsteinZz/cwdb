@@ -76,11 +76,7 @@ int libmpq_archive_open(mpq_archive *mpq_a, unsigned char *mpq_filename) {
 
 	while (!ncnt) {
 		mpq_a->header->id = 0;
-		#ifdef WIN32
-			_lseeki64(mpq_a->fd, mpq_a->mpqpos, SEEK_SET);
-		#else
-			lseek64(mpq_a->fd, mpq_a->mpqpos, SEEK_SET);
-		#endif
+		_lseek(mpq_a->fd, mpq_a->mpqpos, SEEK_SET);
 		rb = _read(mpq_a->fd, mpq_a->header, sizeof(mpq_header));
 
 		/* if different number of bytes read, break the loop */

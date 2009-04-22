@@ -48,13 +48,11 @@ enum SpellCastTargetFlags
 
     TARGET_FLAG_SELF             = 0x0000,
     TARGET_FLAG_UNIT             = 0x0002,
-    TARGET_FLAG_ITEM             = 0x0010,
+    TARGET_FLAG_OBJECT           = 0x0800,
+    TARGET_FLAG_ITEM             = 0x1010,
     TARGET_FLAG_SOURCE_LOCATION  = 0x0020,
     TARGET_FLAG_DEST_LOCATION    = 0x0040,
-    TARGET_FLAG_OBJECT           = 0x0800,
-    TARGET_FLAG_TRADE_ITEM       = 0x1000,
-    TARGET_FLAG_STRING           = 0x2000,
-    TARGET_FLAG_CORPSE           = 0x8000
+    TARGET_FLAG_STRING           = 0x2000
 };
 
 enum Targets
@@ -71,7 +69,6 @@ enum Targets
     TARGET_IN_FRONT_OF_CASTER          = 24,
     TARGET_DUELVSPLAYER                = 25,
     TARGET_GAMEOBJECT_ITEM             = 26,
-    TARGET_MASTER                      = 27,
     TARGET_ALL_ENEMY_IN_AREA_CHANNELED = 28,
     TARGET_MINION                      = 32,
     TARGET_SINGLE_PARTY                = 35,
@@ -112,42 +109,19 @@ enum SpellChannelInterruptFlags
     CHANNEL_FLAG_DELAY       = 0x4000
 };
 
-enum SpellAuraInterruptFlags
-{
-    AURA_INTERRUPT_FLAG_DAMAGE      = 0x00000002,
-    AURA_INTERRUPT_FLAG_NOT_SEATED  = 0x00040000
-};
-
 enum SpellNotifyPushType
 {
     PUSH_IN_FRONT   = 0,
     PUSH_SELF_CENTER  = 1,
     PUSH_DEST_CENTER  = 2
 };
-
-enum Rating
+struct TeleportCoords
 {
-    SPELL_RATING_SKILL                      = 0x0000001, // 0
-    SPELL_RATING_DEFENCE                    = 0x0000002, // 1
-    SPELL_RATING_DODGE                      = 0x0000004, // 2
-    SPELL_RATING_PARRY                      = 0x0000008, // 3
-    SPELL_RATING_BLOCK                      = 0x0000010, // 4
-    SPELL_RATING_MELEE_HIT                  = 0x0000020, // 5
-    SPELL_RATING_RANGED_HIT                 = 0x0000040, // 6
-    SPELL_RATING_SPELL_HIT                  = 0x0000080, // 7
-    SPELL_RATING_MELEE_CRIT_HIT             = 0x0000100, // 8
-    SPELL_RATING_RANGED_CRIT_HIT            = 0x0000200, // 9
-    SPELL_RATING_SPELL_CRIT_HIT             = 0x0000400, // 10
-    //more ratings here?
-    SPELL_RATING_MELEE_HASTE                = 0x0020000, // 17
-    SPELL_RATING_RANGED_HASTE               = 0x0040000, // 18
-    SPELL_RATING_SPELL_HASTE                = 0x0080000, // 19
-    SPELL_RATING_HIT                        = 0x0100000, // 20
-    SPELL_RATING_CRIT_HIT                   = 0x0200000, // 21
-    SPELL_RATING_HIT_AVOIDANCE              = 0x0400000, // 22
-    SPELL_RATING_CRIT_AVOIDANCE             = 0x0800000, // 23
-    SPELL_RATING_RESILIENCE                 = 0x1000000  // 24
-
+    uint32 id;
+    uint32 mapId;
+    float x;
+    float y;
+    float z;
 };
 
 bool IsQuestTameSpell(uint32 spellId);
@@ -174,9 +148,8 @@ class SpellCastTargets
             m_itemTarget = target.m_itemTarget;
             m_GOTarget   = target.m_GOTarget;
 
-            m_unitTargetGUID   = target.m_unitTargetGUID;
-            m_GOTargetGUID     = target.m_GOTargetGUID;
-            m_CorpseTargetGUID = target.m_CorpseTargetGUID;
+            m_unitTargetGUID = target.m_unitTargetGUID;
+            m_GOTargetGUID   = target.m_GOTargetGUID;
 
             m_srcX = target.m_srcX;
             m_srcY = target.m_srcY;
@@ -201,10 +174,6 @@ class SpellCastTargets
         GameObject *getGOTarget() const { return m_GOTarget; }
         void setGOTarget(GameObject *target);
 
-        uint64 getCorpseTargetGUID() const { return m_CorpseTargetGUID; }
-
-        bool IsEmpty() const { return m_GOTargetGUID==0 && m_unitTargetGUID==0 && m_itemTarget==0 && m_CorpseTargetGUID==0; }
-
         void Update(Unit* caster);
 
         Item *m_itemTarget;
@@ -221,7 +190,6 @@ class SpellCastTargets
         // object GUID, can be used always
         uint64 m_unitTargetGUID;
         uint64 m_GOTargetGUID;
-        uint64 m_CorpseTargetGUID;
 };
 
 enum SpellState
@@ -238,7 +206,7 @@ enum SpellModOp
     SPELLMOD_DAMAGE = 0,
     SPELLMOD_DURATION = 1,
     SPELLMOD_THREAT = 2,
-    SPELLMOD_EFFECT1 = 3,
+    SPELLMOD_ATTACK_POWER_BONUS = 3,
     SPELLMOD_EXTRA_BLOCKS = 4,
     SPELLMOD_RANGE = 5,
     SPELLMOD_RADIUS = 6,
@@ -247,8 +215,7 @@ enum SpellModOp
     SPELLMOD_NOT_LOSE_CASTING_TIME = 9,
     SPELLMOD_CASTING_TIME = 10,
     SPELLMOD_COOLDOWN = 11,
-    SPELLMOD_EFFECT2 = 12,
-    // spellmod 13 unused
+    SPELLMOD_MOVEMENT_SPEED = 12,
     SPELLMOD_COST = 14,
     SPELLMOD_CRIT_DAMAGE_BONUS = 15,
     SPELLMOD_RESIST_MISS_CHANCE = 16,
@@ -258,173 +225,166 @@ enum SpellModOp
     SPELLMOD_EFFECT_PAST_FIRST = 20,
     SPELLMOD_CASTING_TIME_OLD = 21,
     SPELLMOD_DOT = 22,
-    SPELLMOD_EFFECT3 = 23,
-    SPELLMOD_SPELL_DAMAGE = 24,
-    // spellmod 25, 26 unused
+    SPELLMOD_PENALTY1 = 23,
+    SPELLMOD_PENALTY2 = 24,
     SPELLMOD_MANA_LOST_PER_DAMAGE_TAKEN = 27,
-    SPELLMOD_RESIST_DISPEL_CHANCE = 28
 };
 
 #define SPELLMOD_COUNT 32
 
 enum SpellFailedReason
 {
-    SPELL_FAILED_AFFECTING_COMBAT  = 0,
-    SPELL_FAILED_ALREADY_AT_FULL_HEALTH  = 1,
-    SPELL_FAILED_ALREADY_AT_FULL_POWER   = 2,
-    SPELL_FAILED_ALREADY_BEING_TAMED   = 3,
-    SPELL_FAILED_ALREADY_HAVE_CHARM  = 4,
-    SPELL_FAILED_ALREADY_HAVE_SUMMON   = 5,
-    SPELL_FAILED_ALREADY_OPEN   = 6,
-    SPELL_FAILED_AURA_BOUNCED   = 7,
-    SPELL_FAILED_AUTOTRACK_INTERRUPTED   = 8,
-    SPELL_FAILED_BAD_IMPLICIT_TARGETS   = 9,
-    SPELL_FAILED_BAD_TARGETS   = 10,
-    SPELL_FAILED_CANT_BE_CHARMED   = 11,
-    SPELL_FAILED_CANT_BE_DISENCHANTED   = 12,
-    SPELL_FAILED_CANT_BE_DISENCHANTED_SKILL  = 13,
-    SPELL_FAILED_CANT_BE_PROSPECTED  = 14,
-    SPELL_FAILED_CANT_CAST_ON_TAPPED   = 15,
-    SPELL_FAILED_CANT_DUEL_WHILE_INVISIBLE   = 16,
-    SPELL_FAILED_CANT_DUEL_WHILE_STEALTHED   = 17,
-    SPELL_FAILED_CANT_STEALTH   = 18,
-    SPELL_FAILED_CASTER_AURASTATE   = 19,
-    SPELL_FAILED_CASTER_DEAD   = 20,
-    SPELL_FAILED_CHARMED   = 21,
-    SPELL_FAILED_CHEST_IN_USE   = 22,
-    SPELL_FAILED_CONFUSED   = 23,
-    SPELL_FAILED_DONT_REPORT   = 24,
-    SPELL_FAILED_EQUIPPED_ITEM   = 25,
-    SPELL_FAILED_EQUIPPED_ITEM_CLASS   = 26,
-    SPELL_FAILED_EQUIPPED_ITEM_CLASS_MAINHAND   = 27,
-    SPELL_FAILED_EQUIPPED_ITEM_CLASS_OFFHAND   = 28,
-    SPELL_FAILED_ERROR   = 29,
-    SPELL_FAILED_FIZZLE  = 30,
-    SPELL_FAILED_FLEEING   = 31,
-    SPELL_FAILED_FOOD_LOWLEVEL   = 32,
-    SPELL_FAILED_HIGHLEVEL   = 33,
-    SPELL_FAILED_HUNGER_SATIATED   = 34,
-    SPELL_FAILED_IMMUNE  = 35,
-    SPELL_FAILED_INTERRUPTED   = 36,
-    SPELL_FAILED_INTERRUPTED_COMBAT  = 37,
-    SPELL_FAILED_ITEM_ALREADY_ENCHANTED  = 38,
-    SPELL_FAILED_ITEM_GONE   = 39,
-    SPELL_FAILED_ITEM_NOT_FOUND  = 40,
-    SPELL_FAILED_ITEM_NOT_READY  = 41,
-    SPELL_FAILED_LEVEL_REQUIREMENT   = 42,
-    SPELL_FAILED_LINE_OF_SIGHT   = 43,
-    SPELL_FAILED_LOWLEVEL   = 44,
-    SPELL_FAILED_LOW_CASTLEVEL   = 45,
-    SPELL_FAILED_MAINHAND_EMPTY  = 46,
-    SPELL_FAILED_MOVING  = 47,
-    SPELL_FAILED_NEED_AMMO   = 48,
-    SPELL_FAILED_NEED_AMMO_POUCH   = 49,
-    SPELL_FAILED_NEED_EXOTIC_AMMO   = 50,
-    SPELL_FAILED_NOPATH  = 51,
-    SPELL_FAILED_NOT_BEHIND  = 52,
-    SPELL_FAILED_NOT_FISHABLE   = 53,
-    SPELL_FAILED_NOT_HERE   = 54,
-    SPELL_FAILED_NOT_INFRONT   = 55,
-    SPELL_FAILED_NOT_IN_CONTROL  = 56,
-    SPELL_FAILED_NOT_KNOWN   = 57,
-    SPELL_FAILED_NOT_MOUNTED   = 58,
-    SPELL_FAILED_NOT_ON_TAXI   = 59,
-    SPELL_FAILED_NOT_ON_TRANSPORT   = 60,
-    SPELL_FAILED_NOT_READY   = 61,
-    SPELL_FAILED_NOT_SHAPESHIFT  = 62,
-    SPELL_FAILED_NOT_STANDING   = 63,
-    SPELL_FAILED_NOT_TRADEABLE   = 64,
-    SPELL_FAILED_NOT_TRADING   = 65,
-    SPELL_FAILED_NOT_UNSHEATHED  = 66,
-    SPELL_FAILED_NOT_WHILE_GHOST   = 67,
-    SPELL_FAILED_NO_AMMO   = 68,
-    SPELL_FAILED_NO_CHARGES_REMAIN   = 69,
-    SPELL_FAILED_NO_CHAMPION   = 70,
-    SPELL_FAILED_NO_COMBO_POINTS   = 71,
-    SPELL_FAILED_NO_DUELING  = 72,
-    SPELL_FAILED_NO_ENDURANCE   = 73,
-    SPELL_FAILED_NO_FISH   = 74,
-    SPELL_FAILED_NO_ITEMS_WHILE_SHAPESHIFTED   = 75,
-    SPELL_FAILED_NO_MOUNTS_ALLOWED   = 76,
-    SPELL_FAILED_NO_PET  = 77,
-    SPELL_FAILED_NO_POWER   = 78,
-    SPELL_FAILED_NOTHING_TO_DISPEL   = 79,
-    SPELL_FAILED_NOTHING_TO_STEAL   = 80,
-    SPELL_FAILED_ONLY_ABOVEWATER   = 81,
-    SPELL_FAILED_ONLY_DAYTIME   = 82,
-    SPELL_FAILED_ONLY_INDOORS   = 83,
-    SPELL_FAILED_ONLY_MOUNTED   = 84,
-    SPELL_FAILED_ONLY_NIGHTTIME  = 85,
-    SPELL_FAILED_ONLY_OUTDOORS   = 86,
-    SPELL_FAILED_ONLY_SHAPESHIFT   = 87,
-    SPELL_FAILED_ONLY_STEALTHED  = 88,
-    SPELL_FAILED_ONLY_UNDERWATER   = 89,
-    SPELL_FAILED_OUT_OF_RANGE   = 90,
-    SPELL_FAILED_PACIFIED   = 91,
-    SPELL_FAILED_POSSESSED   = 92,
-    SPELL_FAILED_REAGENTS   = 93,
-    SPELL_FAILED_REQUIRES_AREA   = 94,
-    SPELL_FAILED_REQUIRES_SPELL_FOCUS   = 95,
-    SPELL_FAILED_ROOTED  = 96,
-    SPELL_FAILED_SILENCED   = 97,
-    SPELL_FAILED_SPELL_IN_PROGRESS   = 98,
-    SPELL_FAILED_SPELL_LEARNED   = 99,
-    SPELL_FAILED_SPELL_UNAVAILABLE   = 100,
-    SPELL_FAILED_STUNNED   = 101,
-    SPELL_FAILED_TARGETS_DEAD   = 102,
-    SPELL_FAILED_TARGET_AFFECTING_COMBAT   = 103,
-    SPELL_FAILED_TARGET_AURASTATE   = 104,
-    SPELL_FAILED_TARGET_DUELING  = 105,
-    SPELL_FAILED_TARGET_ENEMY   = 106,
-    SPELL_FAILED_TARGET_ENRAGED  = 107,
-    SPELL_FAILED_TARGET_FRIENDLY   = 108,
-    SPELL_FAILED_TARGET_IN_COMBAT   = 109,
-    SPELL_FAILED_TARGET_IS_PLAYER   = 110,
-    SPELL_FAILED_TARGET_NOT_DEAD   = 111,
-    SPELL_FAILED_TARGET_NOT_IN_PARTY   = 112,
-    SPELL_FAILED_TARGET_NOT_LOOTED   = 113,
-    SPELL_FAILED_TARGET_NOT_PLAYER   = 114,
-    SPELL_FAILED_TARGET_NO_POCKETS   = 115,
-    SPELL_FAILED_TARGET_NO_WEAPONS   = 116,
-    SPELL_FAILED_TARGET_UNSKINNABLE  = 117,
-    SPELL_FAILED_THIRST_SATIATED   = 118,
-    SPELL_FAILED_TOO_CLOSE   = 119,
-    SPELL_FAILED_TOO_MANY_OF_ITEM   = 120,
-    SPELL_FAILED_TOTEM_CATEGORY  = 121,
-    SPELL_FAILED_TOTEMS  = 122,
-    SPELL_FAILED_TRAINING_POINTS   = 123,
-    SPELL_FAILED_TRY_AGAIN   = 124,
-    SPELL_FAILED_UNIT_NOT_BEHIND   = 125,
-    SPELL_FAILED_UNIT_NOT_INFRONT   = 126,
-    SPELL_FAILED_WRONG_PET_FOOD  = 127,
-    SPELL_FAILED_NOT_WHILE_FATIGUED  = 128,
-    SPELL_FAILED_TARGET_NOT_IN_INSTANCE  = 129,
-    SPELL_FAILED_NOT_WHILE_TRADING   = 130,
-    SPELL_FAILED_TARGET_NOT_IN_RAID  = 131,
-    SPELL_FAILED_DISENCHANT_WHILE_LOOTING   = 132,
-    SPELL_FAILED_PROSPECT_WHILE_LOOTING  = 133,
-    SPELL_FAILED_PROSPECT_NEED_MORE  = 134,
-    SPELL_FAILED_TARGET_FREEFORALL   = 135,
-    SPELL_FAILED_NO_EDIBLE_CORPSES   = 136,
-    SPELL_FAILED_ONLY_BATTLEGROUNDS  = 137,
-    SPELL_FAILED_TARGET_NOT_GHOST   = 138,
-    SPELL_FAILED_TOO_MANY_SKILLS   = 139,
-    SPELL_FAILED_TRANSFORM_UNUSABLE  = 140,
-    SPELL_FAILED_WRONG_WEATHER   = 141,
-    SPELL_FAILED_DAMAGE_IMMUNE   = 142,
-    SPELL_FAILED_PREVENTED_BY_MECHANIC   = 143,
-    SPELL_FAILED_PLAY_TIME   = 144,
-    SPELL_FAILED_REPUTATION  = 145,
-    SPELL_FAILED_MIN_SKILL   = 146,
-    SPELL_FAILED_NOT_IN_ARENA   = 147,
-    SPELL_FAILED_NOT_ON_SHAPESHIFT   = 148,
-    SPELL_FAILED_NOT_ON_STEALTHED   = 149,
-    SPELL_FAILED_NOT_ON_DAMAGE_IMMUNE = 150,
-    SPELL_FAILED_NOT_ON_MOUNTED = 151,
-    SPELL_FAILED_TOO_SHALLOW = 152,
-    SPELL_FAILED_TARGET_NOT_IN_SANCTUARY = 153,
-    SPELL_FAILED_UNKNOWN = 154,
-    SPELL_FAILED_NUMREASONS
+    CAST_FAIL_IN_COMBAT                     = 0,
+    CAST_FAIL_ALREADY_FULL_HEALTH           = 1,
+    CAST_FAIL_ALREADY_FULL_MANA             = 2,
+    //CAST_FAIL_ALREADY_FULL_RAGE           = 2,
+    CAST_FAIL_CREATURE_ALREADY_TAMING       = 3,
+    CAST_FAIL_ALREADY_HAVE_CHARMED          = 4,
+    CAST_FAIL_ALREADY_HAVE_SUMMON           = 5,
+    CAST_FAIL_ALREADY_OPEN                  = 6,
+    CAST_FAIL_MORE_POWERFUL_SPELL_ACTIVE    = 7,
+    //CAST_FAIL_FAILED                      = 8,-> 29
+    CAST_FAIL_NO_TARGET                     = 9,
+    CAST_FAIL_INVALID_TARGET                = 10,
+    CAST_FAIL_CANT_BE_CHARMED               = 11,
+    CAST_FAIL_CANT_BE_DISENCHANTED          = 12,           //decompose
+    // 13 SPELL_FAILED_CANT_BE_PROSPECTED
+    CAST_FAIL_TARGET_IS_TAPPED              = 13+1,
+    CAST_FAIL_CANT_START_DUEL_INVISIBLE     = 14+1,
+    CAST_FAIL_CANT_START_DUEL_STEALTHED     = 15+1,
+    CAST_FAIL_TOO_CLOSE_TO_ENEMY            = 16+1,
+    CAST_FAIL_CANT_DO_THAT_YET              = 17+1,
+    CAST_FAIL_YOU_ARE_DEAD                  = 18+1,
+    CAST_FAIL_CANT_DO_WHILE_XXXX            =19,            //NONE
+    CAST_FAIL_CANT_DO_WHILE_CHARMED         =19+1,          //SPELL_FAILED_CHARMED
+    CAST_FAIL_OBJECT_ALREADY_BEING_USED     = 20+1,         //SPELL_FAILED_CHEST_IN_USE
+    CAST_FAIL_CANT_DO_WHILE_CONFUSED        = 21+1,         //SPELL_FAILED_CONFUSED
+    //23 is gone.
+    CAST_FAIL_MUST_HAVE_ITEM_EQUIPPED       = 22 + 1 + 1,
+    CAST_FAIL_MUST_HAVE_XXXX_EQUIPPED       = 23 + 1 + 1,   //SPELL_FAILED_EQUIPPED_ITEM_CLASS
+    CAST_FAIL_MUST_HAVE_XXXX_IN_MAINHAND    = 24 + 1 + 1,   //SPELL_FAILED_EQUIPPED_ITEM_CLASS_MAINHAND
+    CAST_FAIL_MUST_HAVE_XXXX_IN_OFFHAND     = 25 + 1 + 1,   //SPELL_FAILED_EQUIPPED_ITEM_CLASS_OFFHAND
+    CAST_FAIL_INTERNAL_ERROR                = 26 + 1 + 1,
+    CAST_FAIL_FAILED                        = 29,           // Doesn't exist anymore? Used Fizzle value atm.
+    CAST_FAIL_FIZZLED                       = 27 + 1 + 1,   // changed (+2) 12.1.1
+    CAST_FAIL_YOU_ARE_FLEEING               = 28 + 1 + 1,
+    CAST_FAIL_FOOD_TOO_LOWLEVEL_FOR_PET     = 29 + 1 + 1,
+    CAST_FAIL_TARGET_IS_TOO_HIGH            = 30 + 1 + 1,
+    //32 + 1 is gone.
+    CAST_FAIL_IMMUNE                        = 32 + 1 + 1,   //SPELL_FAILED_IMMUNE
+    CAST_FAIL_INTERRUPTED                   = 33 + 1 + 1,   //SPELL_FAILED_INTERRUPTED
+    CAST_FAIL_INTERRUPTED1                  = 34 + 1 + 1,   //SPELL_FAILED_INTERRUPTED_COMBAT
+    CAST_FAIL_INTERRUPTED_COMBAT            = 36,           //just 36 SPELL_FAILED_INTERRUPTED_COMBAT
+    CAST_FAIL_ITEM_ALREADY_ENCHANTED        = 35 + 1 + 1,
+    CAST_FAIL_ITEM_NOT_EXIST                = 36 + 1 + 1,
+    CAST_FAIL_ENCHANT_NOT_EXISTING_ITEM     = 37 + 1 + 1,
+    CAST_FAIL_ITEM_NOT_READY                = 38 + 1 + 1,
+    CAST_FAIL_YOU_ARE_NOT_HIGH_ENOUGH       = 39 + 1 + 1,
+    CAST_FAIL_NOT_IN_LINE_OF_SIGHT          = 40 + 1 + 1,
+    CAST_FAIL_TARGET_TOO_LOW                = 41 + 1 + 1,
+    CAST_FAIL_SKILL_NOT_HIGH_ENOUGH         = 42 + 1 + 1,
+    CAST_FAIL_WEAPON_HAND_IS_EMPTY          = 43 + 1 + 1,
+    CAST_FAIL_CANT_DO_WHILE_MOVING          = 44 + 1 + 1,
+    CAST_FAIL_NEED_AMMO_IN_PAPERDOLL_SLOT   = 45 + 1 + 1,
+    CAST_FAIL_REQUIRES_SOMETHING            = 46 + 1 + 1,
+    CAST_FAIL_NEED_EXOTIC_AMMO              = 47 + 1 + 1,
+    CAST_FAIL_NO_PATH_AVAILABLE             = 48 + 1 + 1,
+    CAST_FAIL_NOT_BEHIND_TARGET             = 49 + 1 + 1,
+    CAST_FAIL_DIDNT_LAND_IN_FISHABLE_WATER  = 50 + 1 + 1,
+    CAST_FAIL_CANT_BE_CAST_HERE             = 51 + 1 + 1,
+    CAST_FAIL_NOT_IN_FRONT_OF_TARGET        = 52 + 1 + 1,
+    CAST_FAIL_NOT_IN_CONTROL_OF_ACTIONS     = 53 + 1 + 1,
+    CAST_FAIL_SPELL_NOT_LEARNED             = 54 + 1 + 1,
+    CAST_FAIL_CANT_USE_WHEN_MOUNTED         = 55 + 1 + 1,
+    CAST_FAIL_YOU_ARE_IN_FLIGHT             = 56 + 1 + 1,
+    CAST_FAIL_YOU_ARE_ON_TRANSPORT          = 57 + 1 + 1,
+    CAST_FAIL_SPELL_NOT_READY_YET           = 58 + 1 + 1,
+    CAST_FAIL_CANT_DO_IN_SHAPESHIFT         = 59 + 1 + 1,
+    CAST_FAIL_HAVE_TO_BE_STANDING           = 60 + 1 + 1,
+    CAST_FAIL_CAN_USE_ONLY_ON_OWN_OBJECT    = 61 + 1 + 1,   // rogues trying "enchant" other's weapon with poison
+    //CAST_FAIL_ALREADY_OPEN1               = 62,
+
+    CAST_FAIL_CANT_ENCHANT_TRADE_ITEM       = 63 + 1,
+    CAST_FAIL_HAVE_TO_BE_UNSHEATHED         = 63 + 1 + 1,   // yellow text SPELL_FAILED_NOT_UNSHEATHED
+    CAST_FAIL_CANT_CAST_AS_GHOST            = 64 + 1 + 1,
+    CAST_FAIL_NO_AMMO                       = 65 + 1 + 1,
+    CAST_FAIL_NO_CHARGES_REMAIN             = 66 + 1 + 1,
+    CAST_FAIL_NOT_SELECT                    = 67 + 1 + 1,
+    CAST_FAIL_COMBO_POINTS_REQUIRED         = 68 + 1 + 1,
+    CAST_FAIL_NO_DUELING_HERE               = 69 + 1 + 1,
+    CAST_FAIL_NOT_ENOUGH_ENDURANCE          = 70 + 1 + 1,
+    CAST_FAIL_THERE_ARENT_ANY_FISH_HERE     = 71 + 1 + 1,
+    CAST_FAIL_CANT_USE_WHILE_SHAPESHIFTED   = 72 + 1 + 1,
+    CAST_FAIL_CANT_MOUNT_HERE               = 73 + 1 + 1,
+    CAST_FAIL_YOU_DO_NOT_HAVE_PET           = 74 + 1 + 1,
+    CAST_FAIL_NOT_ENOUGH_MANA               = 75 + 1 + 1,
+    CAST_FAIL_NOT_AURA_TO_QUSHAN            = 76 + 1 + 1,
+    //= 79, CAST_FAIL_NOT_ITEM_TO_STEAL        = 111 + 1 + 2   //(SPELL_FAILED_NOTHING_TO_STEAL)
+    CAST_FAIL_CANT_USE_WHILE_SWIMMING       = 77 + 1 + 2,
+    CAST_FAIL_CAN_ONLY_USE_AT_DAY           = 78 + 1 + 2,
+    CAST_FAIL_CAN_ONLY_USE_INDOORS          = 79 + 1 + 2,
+    CAST_FAIL_CAN_ONLY_USE_MOUNTED          = 80 + 1 + 2,
+    CAST_FAIL_CAN_ONLY_USE_AT_NIGHT         = 81 + 1 + 2,
+    CAST_FAIL_CAN_ONLY_USE_OUTDOORS         = 82 + 1 + 2,
+    //CAST_FAIL_ONLY_SHAPESHIFTED           = 83                    // didn't display
+    // 86 none
+    CAST_FAIL_CAN_ONLY_USE_STEALTHED        = 85 + 2,
+    CAST_FAIL_CAN_ONLY_USE_WHILE_SWIMMING   = 86 + 2,
+    CAST_FAIL_OUT_OF_RANGE                  = 87 + 2,
+    CAST_FAIL_CANT_USE_WHILE_PACIFIED       = 87 + 1 + 2,
+    CAST_FAIL_YOU_ARE_POSSESSED             = 88 + 1 + 2,
+    CAST_FAIL_YOU_NEED_TO_BE_IN_XXX         = 90 + 1 + 2,
+    CAST_FAIL_REQUIRES_XXX                  = 91 + 1 + 2,
+    CAST_FAIL_UNABLE_TO_MOVE                = 92 + 1 + 2,
+    CAST_FAIL_SILENCED                      = 93 + 1 + 2,
+    CAST_FAIL_ANOTHER_ACTION_IS_IN_PROGRESS = 94 + 1 + 2,
+    CAST_FAIL_ALREADY_LEARNED_THAT_SPELL    = 95 + 1 + 2,
+    CAST_FAIL_SPELL_NOT_AVAILABLE_TO_YOU    = 96 + 1 + 2,
+    CAST_FAIL_CANT_DO_WHILE_STUNNED         = 97 + 1 + 2,
+    CAST_FAIL_YOUR_TARGET_IS_DEAD           = 98 + 1 + 2,
+    CAST_FAIL_TARGET_IS_IN_COMBAT           = 99 + 1 + 2,
+    CAST_FAIL_CANT_DO_THAT_YET_2            = 100 + 1 + 2,
+    CAST_FAIL_TARGET_IS_DUELING             = 101 + 1 + 2,
+    CAST_FAIL_TARGET_IS_HOSTILE             = 102 + 1 + 2,
+    CAST_FAIL_TARGET_IS_TOO_ENRAGED_TO_CHARM = 103 + 1 + 2,
+    CAST_FAIL_TARGET_IS_FRIENDLY            = 104 + 1 + 2,
+    CAST_FAIL_TARGET_CANT_BE_IN_COMBAT      = 105 + 1 + 2,
+    CAST_FAIL_CANT_TARGET_PLAYERS           = 106 + 1 + 2,
+    CAST_FAIL_TARGET_IS_ALIVE               = 107 + 1 + 2,
+    CAST_FAIL_TARGET_NOT_IN_YOUR_PARTY      = 108 + 1 + 2,
+    CAST_FAIL_CREATURE_MUST_BE_LOOTED_FIRST = 109 + 1 + 2,
+    CAST_FAIL_AUCTION_HAVE_CANCEL           = 110 + 1 + 2,
+    CAST_FAIL_NOT_ITEM_TO_STEAL             = 111 + 1 + 2,
+    //CAST_FAIL_TARGET_IS_NOT_A_PLAYER      = 107,
+    //CAST_FAIL_NO_POCKETS_TO_PICK          = 108,
+    CAST_FAIL_TARGET_HAS_NO_WEAPONS_EQUIPPED = 112 + 1 + 2,
+    CAST_FAIL_NOT_SKINNABLE                 = 113 + 1 + 2,
+    CAST_FAIL_TOO_CLOSE                     = 115 + 1 + 2,
+    CAST_FAIL_TOO_MANY_OF_THAT_ITEM_ALREADY = 116 + 1 + 2,
+    CAST_FAIL_NOT_ENOUGH_TRAINING_POINTS    = 118 + 1 + 2,
+    CAST_FAIL_FAILED_ATTEMPT                = 119 + 1 + 2,
+    CAST_FAIL_TARGET_NEED_TO_BE_BEHIND      = 120 + 1 + 2,
+    CAST_FAIL_TARGET_NEED_TO_BE_INFRONT     = 121 + 1 + 2,
+    CAST_FAIL_PET_DOESNT_LIKE_THAT_FOOD     = 122 + 1 + 2,
+    CAST_FAIL_CANT_CAST_WHILE_FATIGUED      = 123 + 1 + 2,
+    CAST_FAIL_TARGET_MUST_BE_IN_THIS_INSTANCE = 124 + 1 + 2,
+    CAST_FAIL_CANT_CAST_WHILE_TRADING       = 125 + 1 + 2,
+    CAST_FAIL_TARGET_IS_NOT_PARTY_OR_RAID   = 126 + 1 + 2,
+    CAST_FAIL_CANT_DISENCHANT_WHILE_LOOTING = 127 + 1 + 2,
+    CAST_FAIL_TARGET_IS_IN_FFA_PVP_COMBAT   = 133,
+    //CAST_FAIL_TARGET_IS_NOT_A_GHOST       = 128,                  //SPELL_FAILED_TARGET_NOT_GHOST
+    CAST_FAIL_NO_NEARBY_CORPSES_TO_EAT      = 129 + 1 + 4,
+    CAST_FAIL_CAN_ONLY_USE_IN_BATTLEGROUNDS = 130 + 1 + 4,
+    CAST_FAIL_CANT_EQUIP_ON_LOW_RANK        = 131 + 1 + 4,
+    CAST_FAIL_YOUR_PET_CANT_LEARN_MORE_SKILLS = 132 + 1 + 4,
+    CAST_FAIL_CANT_USE_NEW_ITEM             = 133 + 1 + 4,
+    CAST_FAIL_CANT_DO_IN_THIS_WEATHER       = 134 + 1 + 4,
+    CAST_FAIL_CANT_DO_IN_IMMUNE             = 135 + 1 + 4,
+    CAST_FAIL_CANT_DO_IN_XXX                = 136 + 1 + 4,
+    CAST_FAIL_GAME_TIME_OVER                = 137 + 1 + 4,
+    CAST_FAIL_NOT_ENOUGH_RANK               = 138 + 1 + 4,
+    CAST_FAIL_UNKNOWN_REASON                = 139 + 1 + 4,
+    CAST_FAIL_NUMREASONS                    = 145
 };
 
 #define SPELL_SPELL_CHANNEL_UPDATE_INTERVAL 1000
@@ -442,7 +402,7 @@ class Spell
         void EffectTeleportUnits(uint32 i);
         void EffectApplyAura(uint32 i);
         void EffectSendEvent(uint32 i);
-        void EffectPowerBurn(uint32 i);
+        void EffectPowerDrain(uint32 i);
         void EffectManaDrain(uint32 i);
         void EffectHeal(uint32 i);
         void EffectHealthLeach(uint32 i);
@@ -497,20 +457,14 @@ class Spell
         void EffectSelfResurrect(uint32 i);
         void EffectSkinning(uint32 i);
         void EffectCharge(uint32 i);
-        void EffectProspecting(uint32 i);
         void EffectSummonCritter(uint32 i);
         void EffectKnockBack(uint32 i);
         void EffectSummonDeadPet(uint32 i);
-        void EffectDestroyAllTotems(uint32 i);
-        void EffectDurabilityDamage(uint32 i);
         void EffectSkill(uint32 i);
         void EffectAttackMe(uint32 i);
-        void EffectDurabilityDamagePCT(uint32 i);
-        void EffectReduceThreatPercent(uint32 i);
         void EffectResurrectNew(uint32 i);
-        void EffectAddExtraAttacks(uint32 i);
 
-        Spell( Unit* Caster, SpellEntry const *info, bool triggered, Aura* Aur = NULL, uint64 originalCasterGUID = 0 );
+        Spell( Unit* Caster, SpellEntry const *info, bool triggered, Aura* Aur );
         ~Spell();
 
         void prepare(SpellCastTargets * targets);
@@ -523,7 +477,6 @@ class Spell
         void TakeCastItem();
         void TriggerSpell();
         uint8 CanCast();
-
         uint8 CheckItems();
         uint8 CheckRange();
         uint8 CheckMana(uint32 *mana);
@@ -540,7 +493,7 @@ class Spell
         void writeSpellGoTargets( WorldPacket * data );
         void writeAmmoToPacket( WorldPacket * data );
         void FillTargetMap();
-        void SetTargetMap(uint32 i,uint32 cur,std::list<Unit*> &TagUnitMap);
+        void SetTargetMap(uint32 i,uint32 cur,std::list<Unit*> &TagUnitMap,std::list<Item*> &TagItemMap,std::list<GameObject*> &TagGOMap);
 
         void SendCastResult(uint8 result);
         void SendSpellStart();
@@ -551,6 +504,8 @@ class Spell
         void SendChannelUpdate(uint32 time);
         void SendChannelStart(uint32 duration);
         void SendResurrectRequest(Player* target);
+        void SendHealSpellOnPlayer(Player* target, uint32 SpellID, uint32 Damage, bool CriticalHeal = false);
+        void SendHealSpellOnPlayerPet(Player* target, uint32 SpellID, uint32 Damage, bool CriticalHeal = false);
         void SendPlaySpellVisual(uint32 SpellID);
 
         void HandleEffects(Unit *pUnitTarget,Item *pItemTarget,GameObject *pGOTarget,uint32 i, float DamageMultiplier = 1.0);
@@ -569,23 +524,9 @@ class Spell
         bool IsChanneledSpell() const { return m_spellInfo->ChannelInterruptFlags != 0; }
         bool IsChannelActive() const { return m_caster->GetUInt32Value(UNIT_CHANNEL_SPELL) != 0; }
         bool IsMeleeAttackResetSpell() const { return !m_IsTriggeredSpell && (m_spellInfo->School != 0) && !(m_spellInfo->Attributes == 327680 && m_spellInfo->AttributesEx2 ==0); }
-
-        Unit* GetOriginalCaster() { return m_originalCaster; }
-
-        void UpdatePointers();                              // must be used at call Spell code after time delay (non triggered spell cast/update spell call/etc)
-        bool IsAffectedBy(SpellEntry const *spellInfo, uint32 effectId);
-
-        uint32 GetTargetCreatureTypeMask() const;
     protected:
 
-        void SendLoot(uint64 guid, LootType loottype);
-
         Unit* m_caster;
-
-        uint64 m_originalCasterGUID;                        // real source of cast (aura caster/etc), used for spell targets selection
-                                                            // e.g. damage around area spell trigered by victim aura and da,age emeies of aura caster
-        Unit* m_originalCaster;                             // cached pointer for m_originalCaster, updated at Spell::UpdatePointers()
-
         bool m_autoRepeat;
         bool m_meleeSpell;
         bool m_rangedShoot;
@@ -607,8 +548,7 @@ class Spell
         // -------------------------------------------
 
         //List For Triggered Spells
-        typedef std::list<SpellEntry const*> TriggerSpells;
-        TriggerSpells m_TriggerSpells;
+        std::list<SpellEntry const*> m_TriggerSpell;
 
         uint32 m_spellState;
         uint32 m_timer;
@@ -635,8 +575,7 @@ enum SpellTargets
     SPELL_TARGETS_HOSTILE,
     SPELL_TARGETS_NOT_FRIENDLY,
     SPELL_TARGETS_NOT_HOSTILE,
-    SPELL_TARGETS_FRIENDLY,
-    SPELL_TARGETS_AOE_DAMAGE
+    SPELL_TARGETS_FRIENDLY
 };
 
 namespace MaNGOS
@@ -646,27 +585,17 @@ namespace MaNGOS
         std::list<Unit*> &i_data;
         Spell &i_spell;
         const uint32& i_index;
-        Unit* i_originalCaster;
-
-        SpellNotifierPlayer(Spell &spell, std::list<Unit*> &data, const uint32 &i) 
-            : i_data(data), i_spell(spell), i_index(i)
-        {
-            i_originalCaster = i_spell.GetOriginalCaster();
-        }
-
+        SpellNotifierPlayer(Spell &spell, std::list<Unit*> &data, const uint32 &i) : i_data(data), i_spell(spell), i_index(i) {}
         void Visit(PlayerMapType &m)
         {
             float radius = GetRadius(sSpellRadiusStore.LookupEntry(i_spell.m_spellInfo->EffectRadiusIndex[i_index]));
-
-            if(!i_originalCaster)
-                return;
 
             for(PlayerMapType::iterator itr=m.begin(); itr != m.end(); ++itr)
             {
                 if( !itr->second->isAlive() )
                     continue;
 
-                if( i_originalCaster->IsFriendlyTo(itr->second) )
+                if( i_spell.m_caster->IsFriendlyTo(itr->second) )
                     continue;
 
                 if( itr->second->GetDistanceSq(i_spell.m_targets.m_destX, i_spell.m_targets.m_destY, i_spell.m_targets.m_destZ) < radius * radius )
@@ -674,48 +603,28 @@ namespace MaNGOS
             }
         }
         template<class SKIP> void Visit(std::map<OBJECT_HANDLE, SKIP *> &) {}
-        template<class SKIP> void Visit(std::map<OBJECT_HANDLE, CountedPtr<SKIP> > &) {}
     };
 
     struct MANGOS_DLL_DECL SpellNotifierCreatureAndPlayer
     {
-        std::list<Unit*> *i_data;
-        std::list<CountedPtr<Unit> > *i_dataptr;
+        std::list<Unit*> &i_data;
         Spell &i_spell;
         const uint32& i_push_type;
-        float i_radius;
+        float radius;
         SpellTargets i_TargetType;
-        Unit* i_originalCaster;
 
         SpellNotifierCreatureAndPlayer(Spell &spell, std::list<Unit*> &data, const uint32 &i, const uint32 &type,
             SpellTargets TargetType = SPELL_TARGETS_NOT_FRIENDLY)
-            : i_data(&data), i_dataptr(NULL), i_spell(spell), i_push_type(type), i_TargetType(TargetType)
+            : i_data(data), i_spell(spell), i_push_type(type), i_TargetType(TargetType)
         {
             if (i_spell.m_spellInfo->EffectRadiusIndex[i])
-                i_radius = GetRadius(sSpellRadiusStore.LookupEntry(i_spell.m_spellInfo->EffectRadiusIndex[i]));
+                radius = GetRadius(sSpellRadiusStore.LookupEntry(i_spell.m_spellInfo->EffectRadiusIndex[i]));
             else
-                i_radius = GetMaxRange(sSpellRangeStore.LookupEntry(i_spell.m_spellInfo->rangeIndex));
-            i_originalCaster = spell.GetOriginalCaster();
-        }
-
-        SpellNotifierCreatureAndPlayer(Spell &spell, std::list<CountedPtr<Unit> > &data, const uint32 &i, const uint32 &type,
-            SpellTargets TargetType = SPELL_TARGETS_NOT_FRIENDLY)
-            : i_data(NULL), i_dataptr(&data), i_spell(spell), i_push_type(type), i_TargetType(TargetType)
-        {
-            if (i_spell.m_spellInfo->EffectRadiusIndex[i])
-                i_radius = GetRadius(sSpellRadiusStore.LookupEntry(i_spell.m_spellInfo->EffectRadiusIndex[i]));
-            else
-                i_radius = GetMaxRange(sSpellRangeStore.LookupEntry(i_spell.m_spellInfo->rangeIndex));
-            i_originalCaster = spell.GetOriginalCaster();
+                radius = GetMaxRange(sSpellRangeStore.LookupEntry(i_spell.m_spellInfo->rangeIndex));
         }
 
         template<class T> inline void Visit(std::map<OBJECT_HANDLE, T *>  &m)
         {
-            assert(i_data);
-
-            if(!i_originalCaster)
-                return;
-
             for(typename std::map<OBJECT_HANDLE, T*>::iterator itr=m.begin(); itr != m.end(); ++itr)
             {
                 if( !itr->second->isAlive() )
@@ -724,38 +633,20 @@ namespace MaNGOS
                 switch (i_TargetType)
                 {
                     case SPELL_TARGETS_HOSTILE:
-                        if (!i_originalCaster->IsHostileTo( itr->second ))
+                        if (!i_spell.m_caster->IsHostileTo( itr->second ))
                             continue;
                         break;
                     case SPELL_TARGETS_NOT_FRIENDLY:
-                        if (i_originalCaster->IsFriendlyTo( itr->second ))
+                        if (i_spell.m_caster->IsFriendlyTo( itr->second ))
                             continue;
                         break;
                     case SPELL_TARGETS_NOT_HOSTILE:
-                        if (i_originalCaster->IsHostileTo( itr->second ))
+                        if (i_spell.m_caster->IsHostileTo( itr->second ))
                             continue;
                         break;
                     case SPELL_TARGETS_FRIENDLY:
-                        if (!i_originalCaster->IsFriendlyTo( itr->second ))
+                        if (!i_spell.m_caster->IsFriendlyTo( itr->second ))
                             continue;
-                        break;
-                    case SPELL_TARGETS_AOE_DAMAGE:
-                        {
-                            Unit* check = i_originalCaster;
-                            Unit* owner = i_originalCaster->GetCharmerOrOwner();
-                            if(owner)
-                                check = owner;
-                            if( check->GetTypeId()==TYPEID_PLAYER )
-                            {
-                                if (check->IsFriendlyTo( itr->second ))
-                                    continue;
-                            }
-                            else
-                            {
-                                if (!check->IsHostileTo( itr->second ))
-                                    continue;
-                            }
-                        }
                         break;
                     default: continue;
                 }
@@ -763,102 +654,34 @@ namespace MaNGOS
                 switch(i_push_type)
                 {
                     case PUSH_IN_FRONT:
-                        if((i_spell.m_caster->isInFront((Unit*)(itr->second), i_radius )))
-                            i_data->push_back(itr->second);
+                        if((i_spell.m_caster->isInFront((Unit*)(itr->second), radius )))
+                            i_data.push_back(itr->second);
                         break;
                     case PUSH_SELF_CENTER:
-                        if(i_spell.m_caster->IsWithinDistInMap((Unit*)(itr->second), i_radius))
-                            i_data->push_back(itr->second);
+                        if(i_spell.m_caster->IsWithinDistInMap((Unit*)(itr->second), radius))
+                            i_data.push_back(itr->second);
                         break;
                     case PUSH_DEST_CENTER:
-                        if((itr->second->GetDistanceSq(i_spell.m_targets.m_destX, i_spell.m_targets.m_destY, i_spell.m_targets.m_destZ) < i_radius * i_radius ))
-                            i_data->push_back(itr->second);
-                        break;
-                }
-            }
-        }
-
-        template<class T> inline void Visit(std::map<OBJECT_HANDLE, CountedPtr<T> >  &m)
-        {
-            assert(i_dataptr);
-
-            if(!i_originalCaster)
-                return;
-
-            for(typename std::map<OBJECT_HANDLE, CountedPtr<T> >::iterator itr=m.begin(); itr != m.end(); ++itr)
-            {
-                if( !itr->second->isAlive() )
-                    continue;
-
-                switch (i_TargetType)
-                {
-                    case SPELL_TARGETS_HOSTILE:
-                        if (!i_originalCaster->IsHostileTo( itr->second ))
-                            continue;
-                        break;
-                    case SPELL_TARGETS_NOT_FRIENDLY:
-                        if (i_originalCaster->IsFriendlyTo( itr->second ))
-                            continue;
-                        break;
-                    case SPELL_TARGETS_NOT_HOSTILE:
-                        if (i_originalCaster->IsHostileTo( itr->second ))
-                            continue;
-                        break;
-                    case SPELL_TARGETS_FRIENDLY:
-                        if (!i_originalCaster->IsFriendlyTo( itr->second ))
-                            continue;
-                        break;
-                    case SPELL_TARGETS_AOE_DAMAGE:
-                        {
-                            Unit* check = i_originalCaster;
-                            Unit* owner = i_originalCaster->GetCharmerOrOwner();
-                            if(owner)
-                                check = owner;
-                            if( check->GetTypeId()==TYPEID_PLAYER )
-                            {
-                                if (check->IsFriendlyTo( itr->second ))
-                                    continue;
-                            }
-                            else
-                            {
-                                if (!check->IsHostileTo( itr->second ))
-                                    continue;
-                            }
-                        }
-                        break;
-                    default: continue;
-                }
-
-                switch(i_push_type)
-                {
-                    case PUSH_IN_FRONT:
-                        if((i_spell.m_caster->isInFront((Unit*)(&*itr->second), i_radius )))
-                            i_dataptr->push_back(itr->second);
-                        break;
-                    case PUSH_SELF_CENTER:
-                        if(i_spell.m_caster->IsWithinDistInMap((Unit*)(&*itr->second), i_radius))
-                            i_dataptr->push_back(itr->second);
-                        break;
-                    case PUSH_DEST_CENTER:
-                        if((itr->second->GetDistanceSq(i_spell.m_targets.m_destX, i_spell.m_targets.m_destY, i_spell.m_targets.m_destZ) < i_radius * i_radius ))
-                            i_dataptr->push_back(itr->second);
+                        if((itr->second->GetDistanceSq(i_spell.m_targets.m_destX, i_spell.m_targets.m_destY, i_spell.m_targets.m_destZ) < radius * radius ))
+                            i_data.push_back(itr->second);
                         break;
                 }
             }
         }
 
         #ifdef WIN32
-        template<> inline void Visit(CorpseMapType &m ) {}
-        template<> inline void Visit(GameObjectMapType &m ) {}
-        template<> inline void Visit(DynamicObjectMapType &m ) {}
+        template<> inline void Visit(std::map<OBJECT_HANDLE, Corpse *> &m ) {}
+        template<> inline void Visit(std::map<OBJECT_HANDLE, GameObject *> &m ) {}
+        template<> inline void Visit(std::map<OBJECT_HANDLE, DynamicObject *> &m ) {}
         #endif
     };
 
     #ifndef WIN32
-    template<> inline void SpellNotifierCreatureAndPlayer::Visit(CorpseMapType &m ) {}
-    template<> inline void SpellNotifierCreatureAndPlayer::Visit(GameObjectMapType &m ) {}
-    template<> inline void SpellNotifierCreatureAndPlayer::Visit(DynamicObjectMapType &m ) {}
+    template<> inline void SpellNotifierCreatureAndPlayer::Visit(std::map<OBJECT_HANDLE, Corpse *> &m ) {}
+    template<> inline void SpellNotifierCreatureAndPlayer::Visit(std::map<OBJECT_HANDLE, GameObject *> &m ) {}
+    template<> inline void SpellNotifierCreatureAndPlayer::Visit(std::map<OBJECT_HANDLE, DynamicObject *> &m ) {}
     #endif
+
 }
 
 typedef void(Spell::*pEffect)(uint32 i);

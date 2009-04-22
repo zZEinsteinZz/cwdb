@@ -15,8 +15,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
-#ifndef MANGOSSERVER_CHANNELMGR_H
-#define MANGOSSERVER_CHANNELMGR_H
 
 #include "Channel.h"
 #include "Policies/Singleton.h"
@@ -32,11 +30,12 @@ class ChannelMgr
                 delete itr->second;
             channels.clear();
         }
-        Channel *GetJoinChannel(std::string name, uint32 channal_id)
+        Channel *GetJoinChannel(std::string name, Player *p)
         {
             if(channels.count(name) == 0)
             {
-                Channel *nchan = new Channel(name,channal_id);
+                Channel *nchan = new Channel;
+                nchan->SetName(name);
                 channels[name] = nchan;
             }
             return channels[name];
@@ -93,4 +92,3 @@ inline ChannelMgr* channelMgr(uint32 team)
         return &MaNGOS::Singleton<HordeChannelMgr>::Instance();
     return NULL;
 }
-#endif

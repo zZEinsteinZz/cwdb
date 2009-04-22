@@ -38,7 +38,6 @@ class Weather
         bool ReGenerate();
         bool UpdateWeather();
         void SendWeatherUpdateToPlayer(Player *player);
-        static void SendFineWeatherUpdateToPlayer(Player *player);
         void SetWeather(uint32 type, float grade);
         /// For which zone is this weather?
         uint32 GetZone() { return m_zone; };

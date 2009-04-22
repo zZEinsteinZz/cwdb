@@ -28,30 +28,17 @@ noinst_LIBRARIES = libmangosgame.a
 
 #  libmangossgame library will later be reused by ...
 libmangosgame_a_SOURCES = \
-	AccountMgr.cpp \
-	AccountMgr.h \
 	AddonHandler.cpp \
 	AddonHandler.h \
 	AggressorAI.cpp \
 	AggressorAI.h \
 	AnimalRandomMovementGenerator.h \
-	ArenaTeam.cpp \
-	ArenaTeam.h \
-	ArenaTeamHandler.cpp \
 	AuctionHouse.cpp \
 	AuctionHouseObject.h \
 	Bag.cpp \
 	Bag.h \
 	BattleGround.cpp \
-	BattleGroundAB.cpp \
-	BattleGroundAV.cpp \
-	BattleGroundEY.cpp \
-	BattleGroundWS.cpp \
 	BattleGround.h \
-	BattleGroundAB.h \
-	BattleGroundAV.h \
-	BattleGroundEY.h \
-	BattleGroundWS.h \
 	BattleGroundHandler.cpp \
 	BattleGroundMgr.cpp \
 	BattleGroundMgr.h \
@@ -66,6 +53,7 @@ libmangosgame_a_SOURCES = \
 	Chat.h \
 	ChatHandler.cpp \
 	CombatHandler.cpp \
+	CompositeAI.h \
 	ConfusedMovementGenerator.cpp \
 	ConfusedMovementGenerator.h \
 	Container.cpp \
@@ -118,8 +106,6 @@ libmangosgame_a_SOURCES = \
 	IdleMovementGenerator.h \
 	Item.cpp \
 	Item.h \
-	ItemEnchantmentMgr.cpp \
-	ItemEnchantmentMgr.h \
 	ItemHandler.cpp \
 	ItemPrototype.h \
 	Language.h \
@@ -127,7 +113,6 @@ libmangosgame_a_SOURCES = \
 	Level1.cpp \
 	Level2.cpp \
 	Level3.cpp \
-	LFGHandler.cpp \
 	LootHandler.cpp \
 	LootMgr.cpp \
 	LootMgr.h \
@@ -140,6 +125,7 @@ libmangosgame_a_SOURCES = \
 	MapManager.cpp \
 	MapManager.h \
 	MiscHandler.cpp \
+	MiscHandler.h \
 	MotionMaster.cpp \
 	MotionMaster.h \
 	MovementGenerator.cpp \
@@ -168,7 +154,6 @@ libmangosgame_a_SOURCES = \
 	Pet.cpp \
 	Pet.h \
 	PetHandler.cpp \
-	PetitionsHandler.cpp \
 	Player.cpp \
 	Player.h \
 	QueryHandler.cpp \
@@ -228,13 +213,7 @@ libmangosgame_a_SOURCES = \
 	WorldSocket.cpp \
 	WorldSocket.h \
 	WorldSocketMgr.cpp \
-	WorldSocketMgr.h \
-	FollowerReference.cpp \
-	FollowerReference.h \
-	FollowerRefManager.h \
-	LinkedList.h \
-	Reference.h \
-	RefManager.h
+	WorldSocketMgr.h
 
 ## Link against shared library
 libmangosgame_a_LIBADD = ../shared/libmangosshared.a

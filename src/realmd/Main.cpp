@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright (C) 2005,2006,2007 MaNGOS <http://www.mangosproject.org/>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -132,12 +132,12 @@ int main(int argc, char **argv)
         uint32 Aff = sConfig.GetIntDefault("UseProcessors", 0);
         if(Aff > 0)
         {
-            DWORD appAff;
-            DWORD sysAff;
+            uint32 appAff;
+            uint32 sysAff;
 
             if(GetProcessAffinityMask(hProcess,&appAff,&sysAff))
             {
-                DWORD curAff = Aff & appAff;                // remove non accessible processors
+                uint32 curAff = Aff & appAff;               // remove non accessible processors
 
                 if(!curAff )
                 {

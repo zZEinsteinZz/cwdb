@@ -17,7 +17,6 @@
  */
 
 #include "Common.h"
-#include "Language.h"
 #include "Database/DatabaseEnv.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
@@ -33,7 +32,6 @@
 #include "Creature.h"
 #include "MapManager.h"
 #include "Pet.h"
-#include "WaypointMovementGenerator.h"
 
 void WorldSession::HandleTabardVendorActivateOpcode( WorldPacket & recv_data )
 {
@@ -42,7 +40,7 @@ void WorldSession::HandleTabardVendorActivateOpcode( WorldPacket & recv_data )
     uint64 guid;
     recv_data >> guid;
 
-    Creature *unit = ObjectAccessor::Instance().GetNPCIfCanInteractWith(*_player, guid,UNIT_NPC_FLAG_TABARDDESIGNER);
+    Creature *unit = ObjectAccessor::Instance().GetNPCIfCanInteractWith(*_player, guid,UNIT_NPC_FLAG_TABARDVENDOR);
     if (!unit)
     {
         sLog.outDebug( "WORLD: HandleTabardVendorActivateOpcode - Unit (GUID: %u) not found or you can't interact with him.", uint32(GUID_LOPART(guid)) );
@@ -90,6 +88,7 @@ void WorldSession::HandleTrainerListOpcode( WorldPacket & recv_data )
 {
     CHECK_PACKET_SIZE(recv_data,8);
 
+    WorldPacket data;
     uint64 guid;
 
     recv_data >> guid;
@@ -98,7 +97,7 @@ void WorldSession::HandleTrainerListOpcode( WorldPacket & recv_data )
 
 void WorldSession::SendTrainerList( uint64 guid )
 {
-    std::string str = LANG_NPC_TAINER_HELO;
+    std::string str = "Hello! Ready for some training?";
     SendTrainerList( guid, str );
 }
 
@@ -113,10 +112,6 @@ void WorldSession::SendTrainerList( uint64 guid,std::string strTitle )
         return;
     }
 
-    // Lazy loading at first access
-    unit->LoadTrainerSpells();
-
-    // trainer list loaded at check;
     if(!unit->isCanTrainingOf(_player,true))
         return;
 
@@ -128,32 +123,80 @@ void WorldSession::SendTrainerList( uint64 guid,std::string strTitle )
         return;
     }
 
-    Creature::SpellsList const& trainer_spells = unit->GetTrainerSpells();
+    std::list<TrainerSpell*> Tspells;
+    std::list<TrainerSpell*>::iterator itr;
 
-    WorldPacket data( SMSG_TRAINER_LIST, 8+4+4+trainer_spells.size()*38 + strTitle.size()+1);
-    data << guid;
-    data << uint32(unit->GetTrainerType()) << uint32(trainer_spells.size());
-
-    for(Creature::SpellsList::const_iterator itr = trainer_spells.begin(); itr != trainer_spells.end(); ++itr)
+    for (itr = unit->GetTspellsBegin(); itr != unit->GetTspellsEnd();itr++)
     {
-        bool primary_prof_first_rank = objmgr.IsPrimaryProfessionFirstRankSpell(itr->spell->EffectTriggerSpell[0]);
+        if(!(*itr)->spell  || _player->HasSpell((*itr)->spell->Id))
+            continue;
+        //if(!(*itr)->reqspell || _player->HasSpell((*itr)->reqspell))
+        //    Tspells.push_back(*itr);
+        if((*itr)->spell && sSpellStore.LookupEntry((*itr)->spell->EffectTriggerSpell[0]))
+            Tspells.push_back(*itr);
+    }
 
-        data << uint32(itr->spell->Id);
-        data << uint8(_player->GetTrainerSpellState(&*itr));
-        data << uint32(itr->spellcost);
+    WorldPacket data( SMSG_TRAINER_LIST, 200 );             // guess size
+    data << guid;
+    data << uint32(0) << uint32(Tspells.size());
 
-        data << uint32(primary_prof_first_rank ? 1 : 0);    // primary prof. learn confirmation dialog
-        data << uint32(primary_prof_first_rank ? 1 : 0);    // must be equal prev. field to have learn button in enabled state
-        data << uint8(itr->reqlevel ? itr->reqlevel : itr->spell->spellLevel);
-        data << uint32(itr->reqskill);
-        data << uint32(itr->reqskillvalue);
-        data << uint32(objmgr.GetPrevSpellInChain(itr->spell->EffectTriggerSpell[0]));
+    for (itr = Tspells.begin(); itr != Tspells.end();itr++)
+    {
+        uint8 canlearnflag = 1;
+        bool ReqskillValueFlag = false;
+        bool LevelFlag = false;
+        bool ReqspellFlag = false;
+        SpellEntry const *spellInfo = sSpellStore.LookupEntry((*itr)->spell->EffectTriggerSpell[0]);
+        assert(spellInfo);                                  // Tested already in prev. for loop
+
+        if((*itr)->reqskill)
+        {
+            if(_player->GetPureSkillValue((*itr)->reqskill) >= (*itr)->reqskillvalue)
+                ReqskillValueFlag = true;
+        }
+        else
+            ReqskillValueFlag = true;
+
+        uint32 spellLevel = ( (*itr)->reqlevel ? (*itr)->reqlevel : spellInfo->spellLevel);
+        if(_player->getLevel() >= spellLevel)
+            LevelFlag = true;
+
+        uint32 prev_id =  objmgr.GetPrevSpellInChain(spellInfo->Id);
+        if(!prev_id || _player->HasSpell(prev_id))
+            ReqspellFlag = true;
+
+        if(ReqskillValueFlag && LevelFlag && ReqspellFlag)
+            canlearnflag = 0;                               //green, can learn
+        else canlearnflag = 1;                              //red, can't learn
+
+        if(_player->HasSpell(spellInfo->Id))
+            canlearnflag = 2;                               //gray, can't learn
+        else
+        if((*itr)->spell->Effect[0] == SPELL_EFFECT_LEARN_SPELL &&
+            _player->HasSpell((*itr)->spell->EffectTriggerSpell[0]))
+            canlearnflag = 2;                               //gray, can't learn
+
+        if((*itr)->spell->Effect[1] == SPELL_EFFECT_SKILL_STEP)
+            if(!_player->CanLearnProSpell((*itr)->spell->Id))
+                canlearnflag = 1;
+
+        data << uint32((*itr)->spell->Id);
+        data << uint8(canlearnflag);
+        data << uint32((*itr)->spellcost);
+        data << uint32(0);
+        data << uint32(0);
+        data << uint8(spellLevel);
+        data << uint32((*itr)->reqskill);
+        data << uint32((*itr)->reqskillvalue);
+        data << uint32(prev_id);
         data << uint32(0);
         data << uint32(0);
     }
 
     data << strTitle;
     SendPacket( &data );
+
+    Tspells.clear();
 }
 
 void WorldSession::HandleTrainerBuySpellOpcode( WorldPacket & recv_data )
@@ -162,6 +205,7 @@ void WorldSession::HandleTrainerBuySpellOpcode( WorldPacket & recv_data )
 
     uint64 guid;
     uint32 spellId = 0;
+    TrainerSpell *proto=NULL;
 
     recv_data >> guid >> spellId;
     sLog.outDebug( "WORLD: Received CMSG_TRAINER_BUY_SPELL NpcGUID=%u, learn spell id is: %u",uint32(GUID_LOPART(guid)), spellId );
@@ -173,68 +217,77 @@ void WorldSession::HandleTrainerBuySpellOpcode( WorldPacket & recv_data )
         return;
     }
 
-    // Lazy loading at first access
-    unit->LoadTrainerSpells();
-
     if(!unit->isCanTrainingOf(_player,true))
         return;
 
-    TrainerSpell const* trainer_spell = NULL;
+    std::list<TrainerSpell*>::iterator titr;
 
-    // check present spell in trainer spell list
-    Creature::SpellsList const& trainer_spells = unit->GetTrainerSpells();
-    for(Creature::SpellsList::const_iterator itr = trainer_spells.begin(); itr != trainer_spells.end(); ++itr)
+    for (titr = unit->GetTspellsBegin(); titr != unit->GetTspellsEnd();titr++)
     {
-        if(itr->spell->Id == spellId)
+        if((*titr)->spell->Id == spellId)
         {
-            trainer_spell = &*itr;
+            proto = *titr;
             break;
         }
     }
 
-    // not found, cheat?
-    if(!trainer_spell)
+    if (proto == NULL) return;
+
+    SpellEntry const *spellInfo = sSpellStore.LookupEntry(proto->spell->EffectTriggerSpell[0]);
+
+    if(!spellInfo) return;
+    if(_player->HasSpell(spellInfo->Id))
+        return;
+    if(_player->getLevel() < (proto->reqlevel ? proto->reqlevel : spellInfo->spellLevel))
+        return;
+    if(proto->reqskill && _player->GetSkillValue(proto->reqskill) < proto->reqskillvalue)
         return;
 
-    // can't be learn, cheat?
-    if(_player->GetTrainerSpellState(trainer_spell) != TRAINER_SPELL_GREEN)
+    uint32 prev_id =  objmgr.GetPrevSpellInChain(spellInfo->Id);
+    if(prev_id && !_player->HasSpell(prev_id))
         return;
 
-    // check money requirement
-    if(_player->GetMoney() < trainer_spell->spellcost )
-        return;
+    if(proto->spell->Effect[1] == SPELL_EFFECT_SKILL_STEP)
+        if(!_player->CanLearnProSpell(spellId))
+            return;
 
-    SpellEntry const *spellInfo = sSpellStore.LookupEntry(trainer_spell->spell->EffectTriggerSpell[0]);
-
-    WorldPacket data( SMSG_TRAINER_BUY_SUCCEEDED, 12 );
-    data << guid << spellId;
-    SendPacket( &data );
-
-    _player->ModifyMoney( -int32(trainer_spell->spellcost) );
-    if(spellInfo->powerType == 2)
+    if(!proto)
     {
-        _player->addSpell(spellId,4);                   // active = 4 for spell book of hunter's pet
+        sLog.outErrorDb("TrainerBuySpell: Trainer(%u) has not the spell(%u).", uint32(GUID_LOPART(guid)), spellId);
         return;
     }
+    if( _player->GetMoney() >= proto->spellcost )
+    {
+        WorldPacket data( SMSG_TRAINER_BUY_SUCCEEDED, 12 );
+        data << guid << spellId;
+        SendPacket( &data );
 
-    Spell *spell;
-    if(trainer_spell->spell->SpellVisual == 222)
-        spell = new Spell(_player, trainer_spell->spell, false, NULL);
-    else
-        spell = new Spell(unit, trainer_spell->spell, false, NULL);
+        _player->ModifyMoney( -int32(proto->spellcost) );
+        if(spellInfo->powerType == 2)
+        {
+            _player->addSpell(spellId,4);                   // ative = 4 for spell book of hunter's pet
+            return;
+        }
 
-    SpellCastTargets targets;
-    targets.setUnitTarget( _player );
+        Spell *spell;
+        if(proto->spell->SpellVisual == 222)
+            spell = new Spell(_player, proto->spell, false, NULL);
+        else
+            spell = new Spell(unit, proto->spell, false, NULL);
 
-    float u_oprientation = unit->GetOrientation();
+        SpellCastTargets targets;
+        targets.setUnitTarget( _player );
 
-    // trainer always see at customer in time of training (part of client functionality)
-    unit->SetInFront(_player);
+        float u_oprientation = unit->GetOrientation();
 
-    spell->prepare(&targets);
+        // trainer always see at customer in time of training (part of client functionality)
+        unit->SetInFront(_player);
 
-    // trainer always return to original orientation
-    unit->Relocate(unit->GetPositionX(),unit->GetPositionY(),unit->GetPositionZ(),u_oprientation);
+        spell->prepare(&targets);
+
+        // trainer always return to original orientation
+        unit->Relocate(unit->GetPositionX(),unit->GetPositionY(),unit->GetPositionZ(),u_oprientation);
+    }
 }
 
 void WorldSession::HandleGossipHelloOpcode( WorldPacket & recv_data )
@@ -246,17 +299,11 @@ void WorldSession::HandleGossipHelloOpcode( WorldPacket & recv_data )
     uint64 guid;
     recv_data >> guid;
 
-    Creature *unit = ObjectAccessor::Instance().GetNPCIfCanInteractWith(*_player, guid, UNIT_NPC_FLAG_NONE);
+    Creature *unit = ObjectAccessor::Instance().GetNPCIfCanInteractWith(*_player, guid,UNIT_NPC_FLAG_NONE);
     if (!unit)
     {
         sLog.outDebug( "WORLD: HandleGossipHelloOpcode - Unit (GUID: %u) not found or you can't interact with him.", uint32(GUID_LOPART(guid)) );
         return;
-    }
-
-    if( unit->isArmorer() || unit->isCivilian() || unit->isQuestGiver() || unit->isServiceProvider())
-    {
-        unit->StopMoving();
-        //npcIsStopped[unit->GetGUID()] = true;
     }
 
     if(!Script->GossipHello( _player, unit ))
@@ -277,7 +324,7 @@ void WorldSession::HandleGossipSelectOptionOpcode( WorldPacket & recv_data )
 
     recv_data >> guid >> option;
 
-    Creature *unit = ObjectAccessor::Instance().GetNPCIfCanInteractWith(*_player, guid, UNIT_NPC_FLAG_NONE);
+    Creature *unit = ObjectAccessor::Instance().GetNPCIfCanInteractWith(*_player, guid,UNIT_NPC_FLAG_NONE);
     if (!unit)
     {
         sLog.outDebug( "WORLD: HandleGossipSelectOptionOpcode - Unit (GUID: %u) not found or you can't interact with him.", uint32(GUID_LOPART(guid)) );
@@ -298,7 +345,7 @@ void WorldSession::HandleSpiritHealerActivateOpcode( WorldPacket & recv_data )
 
     recv_data >> guid;
 
-    Creature *unit = ObjectAccessor::Instance().GetNPCIfCanInteractWith(*_player, guid, UNIT_NPC_FLAG_SPIRITHEALER);
+    Creature *unit = ObjectAccessor::Instance().GetNPCIfCanInteractWith(*_player, guid,UNIT_NPC_FLAG_SPIRITHEALER);
     if (!unit)
     {
         sLog.outDebug( "WORLD: HandleSpiritHealerActivateOpcode - Unit (GUID: %u) not found or you can't interact with him.", uint32(GUID_LOPART(guid)) );
@@ -326,14 +373,23 @@ void WorldSession::SendSpiritResurrect()
         _player->m_resurrectingSicknessExpire = time(NULL) + (spellLvl-10)*MINUTE;
     }
 
-    _player->ResurrectPlayer(0.5f,false);
+    _player->ResurrectPlayer();
+
+    _player->ApplyStats(false);
+    _player->SetHealth( _player->GetMaxHealth()/2 );
+    _player->SetPower(POWER_MANA, _player->GetMaxPower(POWER_MANA)/2 );
+    _player->SetPower(POWER_RAGE, 0 );
+    _player->SetPower(POWER_ENERGY, _player->GetMaxPower(POWER_ENERGY));
+    _player->ApplyStats(true);
 
     _player->DurabilityLossAll(0.25);
 
+    // update world right away
+    MapManager::Instance().GetMap(_player->GetMapId(), _player)->Add(GetPlayer());
+
     // get corpse nearest graveyard
     WorldSafeLocsEntry const *corpseGrave = NULL;
-    CorpsePtr corpse = _player->GetCorpse();
-    if((bool)corpse)
+    if(Corpse* corpse = _player->GetCorpse())
         corpseGrave = objmgr.GetClosestGraveYard(
             corpse->GetPositionX(), corpse->GetPositionY(), corpse->GetPositionZ(), corpse->GetMapId(), _player->GetTeam() );
 
@@ -348,13 +404,7 @@ void WorldSession::SendSpiritResurrect()
 
         if(corpseGrave != ghostGrave)
             _player->TeleportTo(corpseGrave->map_id, corpseGrave->x, corpseGrave->y, corpseGrave->z, _player->GetOrientation());
-        // or update at original position
-        else
-            MapManager::Instance().GetMap(_player->GetMapId(), _player)->Add(_player);
     }
-    // or update at original position
-    else
-        MapManager::Instance().GetMap(_player->GetMapId(), _player)->Add(_player);
 
     _player->SaveToDB();
 }
@@ -381,59 +431,7 @@ void WorldSession::HandleBinderActivateOpcode( WorldPacket & recv_data )
 
 void WorldSession::SendBindPoint(Creature *npc)
 {
-    uint32 bindspell = 3286, hearthstone_itemid = 6948;
-
-    // update sql homebind
-    sDatabase.PExecute("UPDATE `character_homebind` SET `map` = '%u', `zone` = '%u', `position_x` = '%f', `position_y` = '%f', `position_z` = '%f' WHERE `guid` = '%u'", _player->GetMapId(), _player->GetZoneId(), _player->GetPositionX(), _player->GetPositionY(), _player->GetPositionZ(), _player->GetGUIDLow());
-    _player->m_homebindMapId = _player->GetMapId();
-    _player->m_homebindZoneId = _player->GetZoneId();
-    _player->m_homebindX = _player->GetPositionX();
-    _player->m_homebindY = _player->GetPositionY();
-    _player->m_homebindZ = _player->GetPositionZ();
-
-    // if a player lost/dropped hist hearthstone, he will get a new one
-    if ( !_player->HasItemCount(hearthstone_itemid, 1) && _player->GetBankItemCount(hearthstone_itemid) <1)
-    {
-        uint16 dest;
-        uint8 msg = _player->CanStoreNewItem( NULL_BAG, NULL_SLOT, dest, hearthstone_itemid, 1, false );
-        if( msg == EQUIP_ERR_OK )
-        {
-            Item* newitem = _player->StoreNewItem( dest, hearthstone_itemid, 1, true);
-            _player->SendNewItem(newitem, 1, true, false);
-        }
-        else
-        {
-            _player->SendEquipError( msg, NULL, NULL );
-        }
-    }
-
-    // send spell for bind 3286 bind magic
-    WorldPacket data(SMSG_SPELL_START, (8+8+4+2+4+2+8) );
-    data.append(npc->GetPackGUID());
-    data.append(npc->GetPackGUID());
-    data << bindspell;                                      // spell id
-    data << uint16(0);                                      // cast flags
-    data << uint32(0);                                      // time
-    data << uint16(0x0002);                                 // target mask
-    data.append(_player->GetPackGUID());                    // target's packed guid
-    SendPacket( &data );
-
-    data.Initialize(SMSG_SPELL_GO, (8+8+4+2+1+8+1+2+8));
-    data.append(npc->GetPackGUID());
-    data.append(npc->GetPackGUID());
-    data << bindspell;                                      // spell id
-    data << uint16(0x0100);                                 // cast flags
-    data << uint8(0x01);                                    // targets count
-    data << _player->GetGUID();                             // target's full guid
-    data << uint8(0x00);                                    // ?
-    data << uint16(0x0002);                                 // target mask
-    data.append(_player->GetPackGUID());                    // target's packed guid
-    SendPacket( &data );
-
-    data.Initialize( SMSG_TRAINER_BUY_SUCCEEDED, (8+4));
-    data << npc->GetGUID();
-    data << bindspell;
-    SendPacket( &data );
+    WorldPacket data;
 
     // binding
     data.Initialize( SMSG_BINDPOINTUPDATE, (4+4+4+4+4) );
@@ -451,11 +449,44 @@ void WorldSession::SendBindPoint(Creature *npc)
     DEBUG_LOG("New Home ZoneId is %u",_player->GetZoneId());
 
     // zone update
-    data.Initialize( SMSG_PLAYERBOUND, 8+4 );
+    data.Initialize( SMSG_PLAYERBOUND, 12 );
     data << uint64(_player->GetGUID());
     data << uint32(_player->GetZoneId());
     SendPacket( &data );
 
+    // update sql homebind
+    sDatabase.PExecute("UPDATE `character_homebind` SET `map` = '%u', `zone` = '%u', `position_x` = '%f', `position_y` = '%f', `position_z` = '%f' WHERE `guid` = '%u'", _player->GetMapId(), _player->GetZoneId(), _player->GetPositionX(), _player->GetPositionY(), _player->GetPositionZ(), _player->GetGUIDLow());
+
+    // if a player lost/dropped hist hearthstone, he will get a new one
+    uint32 hearthstone_itemid = 6948;
+    if ( !_player->HasItemCount(hearthstone_itemid, 1) && _player->GetBankItemCount(hearthstone_itemid) <1)
+    {
+        uint16 dest;
+        uint8 msg = _player->CanStoreNewItem( NULL_BAG, NULL_SLOT, dest, hearthstone_itemid, 1, false );
+        if( msg == EQUIP_ERR_OK )
+        {
+            Item* newitem = _player->StoreNewItem( dest, hearthstone_itemid, 1, true);
+            _player->SendNewItem(newitem, 1, true, false);
+        }
+        else
+        {
+            _player->SendEquipError( msg, NULL, NULL );
+        }
+    }
+
+    // send spell for bind 3286 bind magic
+    data.Initialize(SMSG_SPELL_START, (8+8+2+2+2+4+2) );
+    data.append(_player->GetPackGUID());
+    data.append(npc->GetPackGUID());
+    data << uint16(3286) << uint16(0x00) << uint16(0x0F) << uint32(0x00)<< uint16(0x00);
+    SendPacket( &data );
+
+    data.Initialize(SMSG_SPELL_GO, (8+8+2+2+1+1+1+8+4+2+2));
+    data.append(_player->GetPackGUID());
+    data.append(npc->GetPackGUID());
+    data << uint16(3286) << uint16(0x00) << uint8(0x0D) <<  uint8(0x01)<< uint8(0x01) << _player->GetGUID();
+    data << uint32(0x00) << uint16(0x0200) << uint16(0x00);
+    SendPacket( &data );
     _player->PlayerTalkClass->CloseGossip();
 }
 
@@ -464,6 +495,7 @@ void WorldSession::HandleListStabledPetsOpcode( WorldPacket & recv_data )
 {
     CHECK_PACKET_SIZE(recv_data,8);
 
+    WorldPacket data;
     sLog.outDetail("WORLD: Recv MSG_LIST_STABLED_PETS not dispose.");
     uint64 npcGUID;
 

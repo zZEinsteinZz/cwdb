@@ -31,7 +31,6 @@
 #pragma pack(push,1)
 #endif
 
-// from `gameobject_template`
 struct GameObjectInfo
 {
     uint32  id;
@@ -51,40 +50,7 @@ struct GameObjectInfo
     uint32  sound7;
     uint32  sound8;
     uint32  sound9;
-    uint32  sound10;
-    uint32  sound11;
-    uint32  sound12;
-    uint32  sound13;
-    uint32  sound14;
-    uint32  sound15;
-    uint32  sound16;
-    uint32  sound17;
-    uint32  sound18;
-    uint32  sound19;
-    uint32  sound20;
-    uint32  sound21;
-    uint32  sound22;
-    uint32  sound23;
     char   *ScriptName;
-};
-
-// from `ganeobject`
-struct GameObjectData
-{
-    uint32 id;                                              // entry in gamobject_template
-    uint32 mapid;
-    float posX;
-    float posY;
-    float posZ;
-    float orientation;
-    float rotation0;
-    float rotation1;
-    float rotation2;
-    float rotation3;
-    uint32 lootid;
-    uint32 spawntimesecs;
-    uint32 animprogress;
-    uint32 dynflags;
 };
 
 #if defined( __GNUC__ ) && (GCC_MAJOR < 4 || GCC_MAJOR == 4 && GCC_MINOR < 1)
@@ -127,7 +93,7 @@ class MANGOS_DLL_SPEC GameObject : public WorldObject
         uint32 GetDBTableGUIDLow() const { return m_DBTableGuid; }
 
         void SaveToDB();
-        bool LoadFromDB(uint32 guid, uint32 InstanceId);
+        bool LoadFromDB(uint32 guid, QueryResult *result, uint32 InstanceId);
         void DeleteFromDB();
         void SetLootState(LootState s) { m_lootState = s; }
         void SetRespawnTime(int32 respawn)
@@ -136,24 +102,23 @@ class MANGOS_DLL_SPEC GameObject : public WorldObject
             m_respawnDelayTime = respawn > 0 ? respawn : 0;
         }
         void Respawn() { if(m_respawnTime > 0) m_respawnTime = time(NULL); }
-        bool isSpawned() const { return m_respawnDelayTime == 0 || m_respawnTime > 0 && GetOwnerGUID() || m_respawnTime == 0 && !GetOwnerGUID(); }
+        bool isSpawned() { return m_respawnDelayTime == 0 || m_respawnTime > 0 && GetOwnerGUID() || m_respawnTime == 0 && !GetOwnerGUID(); }
         void Refresh();
         void Delete();
         void SetSpellId(uint32 id) { m_spellId = id;}
-        uint32 GetSpellId() const { return m_spellId;}
+        uint32 GetSpellId() { return m_spellId;}
         void getFishLoot(Loot *loot);
-        uint32 GetGoType() const { return GetUInt32Value(GAMEOBJECT_TYPE_ID); }
+        uint32 GetGoType() { return GetUInt32Value(GAMEOBJECT_TYPE_ID); }
 
-        LootState getLootState() const { return m_lootState; }
+        LootState getLootState() { return m_lootState; }
 
         void AddToSkillupList(uint32 PlayerGuidLow) { m_SkillupList.push_back(PlayerGuidLow); }
-        bool IsInSkillupList(uint32 PlayerGuidLow) const
+        bool IsInSkillupList(uint32 PlayerGuidLow)
         {
-            for (std::list<uint32>::const_iterator i = m_SkillupList.begin(); i != m_SkillupList.end(); ++i)
+            for (std::list<uint32>::iterator i = m_SkillupList.begin(); i != m_SkillupList.end(); ++i)
                 if (*i == PlayerGuidLow) return true;
             return false;
         }
-        void ClearSkillupList() { m_SkillupList.clear(); }
 
         void AddUse(Player* player);
         uint32 GetUseCount() const { return m_usetimes; }
@@ -164,11 +129,9 @@ class MANGOS_DLL_SPEC GameObject : public WorldObject
         Loot        loot;
         uint32      lootid;
 
-        bool hasQuest(uint32 quest_id) const;
-        bool hasInvolvedQuest(uint32 quest_id) const;
-
-        bool isVisibleForInState(Player const* u, bool inVisibleList) const;
     protected:
+        void _LoadQuests();
+
         uint32      m_spellId;
         time_t      m_respawnTime;                          // (secs) time of next respawn (or despawn if GO have owner()),
         uint32      m_respawnDelayTime;                     // (secs) if 0 then current GO state no dependent from timer

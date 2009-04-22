@@ -106,6 +106,7 @@ bool Pet::LoadPetFromDB( Unit* owner, uint32 petentry, uint32 petnumber, bool cu
     if(cinfo->type == CREATURE_TYPE_CRITTER)
     {
         AIM_Initialize();
+        AddToWorld();
         MapManager::Instance().GetMap(owner->GetMapId(), owner)->Add((Creature*)this);
         return true;
     }
@@ -128,19 +129,13 @@ bool Pet::LoadPetFromDB( Unit* owner, uint32 petentry, uint32 petnumber, bool cu
                                                             // this enables popup window (pet dismiss, cancel)
             break;
         case HUNTER_PET:
-            SetUInt32Value(UNIT_FIELD_BYTES_0, 0x2020100); //??
             SetUInt32Value(UNIT_FIELD_BYTES_1,(fields[13].GetUInt32()<<8));
-            SetUInt32Value(UNIT_FIELD_BYTES_2, 0x00022801); // can't be renamed (byte (0x02))
-            SetUInt32Value(UNIT_FIELD_FLAGS, UNIT_FLAG_UNKNOWN1);// + UNIT_FLAG_RESTING);
+            SetUInt32Value(UNIT_FIELD_FLAGS, UNIT_FLAG_UNKNOWN1 + UNIT_FLAG_RESTING);
                                                             // this enables popup window (pet abandon, cancel)
 
             // pet not renamed yet, let rename if wont
             if(!fields[17].GetBool())
-            {
-                //SetUInt32Value(UNIT_FIELD_BYTES_2, uint32(0x03 << 16)); // check it...
-                SetUInt32Value(UNIT_FIELD_BYTES_2, 0x00032801); // 0x03
-                //SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_RENAME); // old, not working...
-            }
+                SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_RENAME);
 
             SetUInt32Value(UNIT_MOD_CAST_SPEED, fields[14].GetUInt32() );
             SetUInt32Value(UNIT_TRAINING_POINTS, (getLevel()<<16) + getUsedTrainPoint() );
@@ -152,7 +147,7 @@ bool Pet::LoadPetFromDB( Unit* owner, uint32 petentry, uint32 petnumber, bool cu
             sLog.outError("Pet have incorrect type (%u) for pet loading.",getPetType());
     }
     InitStatsForLevel( petlevel);
-    SetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP, time(NULL));
+    SetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP,0);
     SetUInt32Value(UNIT_FIELD_PETEXPERIENCE, fields[5].GetUInt32());
     SetUInt32Value(UNIT_FIELD_PETNEXTLEVELEXP, fields[6].GetUInt32());
     SetUInt64Value(UNIT_FIELD_CREATEDBY, owner->GetGUID());
@@ -195,6 +190,7 @@ bool Pet::LoadPetFromDB( Unit* owner, uint32 petentry, uint32 petnumber, bool cu
     ObjectAccessor::Instance().AddPet(this);
 
     AIM_Initialize();
+    AddToWorld();
     MapManager::Instance().GetMap(owner->GetMapId(), owner)->Add((Creature*)this);
     owner->SetPet(this);                                    // in DB stored only full controlled creature
     sLog.outDebug("New Pet has guid %u", GetGUIDLow());
@@ -244,7 +240,7 @@ void Pet::SavePetToDB(PetSaveMode mode)
                 "VALUES (%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,'%s','%u','%u','%u','%u')",
                 GetPetNumber(),GetEntry(), owner, GetUInt32Value(UNIT_FIELD_DISPLAYID), getLevel(), GetUInt32Value(UNIT_FIELD_PETEXPERIENCE), GetUInt32Value(UNIT_FIELD_PETNEXTLEVELEXP),
                 m_spells[0], m_spells[1], m_spells[2], m_spells[3], m_actState, GetPower(POWER_HAPPINESS),getloyalty(),getUsedTrainPoint(), name.c_str(),
-                uint32(((GetUInt32Value(UNIT_FIELD_BYTES_2) >> 16) == 3)?0:1),uint32(mode),(GetHealth()<1?1:GetHealth()),GetPower(POWER_MANA));
+                uint32(HasFlag(UNIT_FIELD_FLAGS,UNIT_FLAG_RENAME)?0:1),uint32(mode),(GetHealth()<1?1:GetHealth()),GetPower(POWER_MANA));
             sDatabase.CommitTransaction();
             break;
         }
@@ -267,7 +263,8 @@ void Pet::SavePetToDB(PetSaveMode mode)
     char *subname = "Pet";
     CreatureInfo *ci = objmgr.GetCreatureTemplate(GetEntry());
 
-    WorldPacket data( SMSG_CREATURE_QUERY_RESPONSE, 4+m_name.size()+1+3+strlen(subname)+1+4+4+4+4+4+4+4+2);
+    WorldPacket data;
+    data.Initialize( SMSG_CREATURE_QUERY_RESPONSE );
     data << (uint32)GetEntry();
     data << m_name.c_str();
     data << uint8(0) << uint8(0) << uint8(0);
@@ -498,11 +495,7 @@ bool Pet::CreateBaseAtCreature(Creature* creature)
     SetName(creature->GetName());
     if(cinfo->type == CREATURE_TYPE_BEAST)
     {
-        SetUInt32Value(UNIT_FIELD_BYTES_0, 0x2020100);
-        SetUInt32Value(UNIT_FIELD_BYTES_1, 0x100);
-        SetUInt32Value(UNIT_FIELD_BYTES_2, 0x00032801); // can be renamed (byte 0x03)...
-
-        //SetUInt32Value(UNIT_FIELD_BYTES_1,creature->GetUInt32Value(UNIT_FIELD_BYTES_1));
+        SetUInt32Value(UNIT_FIELD_BYTES_1,creature->GetUInt32Value(UNIT_FIELD_BYTES_1));
 
         SetUInt32Value(UNIT_MOD_CAST_SPEED, creature->GetUInt32Value(UNIT_MOD_CAST_SPEED) );
         SetUInt32Value(UNIT_TRAINING_POINTS, (getLevel()<<16) + getUsedTrainPoint() );
@@ -526,12 +519,6 @@ void Pet::InitStatsForLevel(uint32 petlevel)
     SetLevel( petlevel);
 
     SetArmor(petlevel*50);
-    SetAttackTime(BASE_ATTACK, 2000);
-    SetFloatValue(UNIT_MOD_CAST_SPEED, 1.0);
-
-    // Hunter pets' size does depend on level
-    if(getPetType() == HUNTER_PET)
-        SetFloatValue(OBJECT_FIELD_SCALE_X, 0.4 + float(petlevel) / 100);
 
     switch(getPetType())
     {

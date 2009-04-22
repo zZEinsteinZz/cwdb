@@ -26,10 +26,10 @@
 #include "UpdateMask.h"
 #include "AuctionHouseObject.h"
 
-//please DO NOT use iterator++, because it is slower than ++iterator!!!
-//post-incrementation is always slower than pre-incrementation !
+//pls DO NOT use iterator++, because it is slowlier than ++iterator!!!
+//post-incrementation is always slowlier than pre-incrementation !
 
-//void called when player click on auctioneer npc
+//void called when player click on auctionhouse npc
 void WorldSession::HandleAuctionHelloOpcode( WorldPacket & recv_data )
 {
     CHECK_PACKET_SIZE(recv_data,8);
@@ -89,28 +89,21 @@ bool WorldSession::SendAuctionInfo(WorldPacket & data, AuctionEntry* auction)
     }
     data << auction->Id;
     data << pItem->GetUInt32Value(OBJECT_FIELD_ENTRY);
-
-    for (uint8 i = 0; i < MAX_INSPECTED_ENCHANTMENT_SLOT; i++)
-    {
-        data << (uint32) pItem->GetEnchantmentId(EnchantmentSlot(i));
-        data << (uint32) pItem->GetEnchantmentDuration(EnchantmentSlot(i));
-        data << (uint32) pItem->GetEnchantmentCharges(EnchantmentSlot(i));                                                  
-    }
-
-    data << (uint32) pItem->GetItemRandomPropertyId();      //random item property id
-    data << (uint32) pItem->GetItemSuffixFactor();          //SuffixFactor
+    data << (uint32) pItem->GetUInt32Value(ITEM_FIELD_ENCHANTMENT+0*3+0);
+                                                            // Permanent enchantment id
+    data << (uint32) pItem->GetItemRandomPropertyId();      //random item properity id
+    data << (uint32) 0;                                     //not pItem->GetCreator();// 4a d0 64 02, 0, unknown, maybe enchating
     data << (uint32) pItem->GetCount();                     //item->count
-    data << (uint32) pItem->GetSpellCharges();              //item->charge FFFFFFF
-    data << (uint32) 0;                                     //Unknown
+                                                            //item->charge FFFFFFF
+    data << (uint32) pItem->GetUInt32Value(ITEM_FIELD_SPELL_CHARGES);
     data << (uint32) auction->owner;                        //Auction->owner
-    data << (uint32) 0;                                     //player high_guid
-    data << (uint32) auction->startbid;                     //Auction->startbid (not sure if useful)
-    data << (uint32) ((auction->bid)? objmgr.GetAuctionOutBid(auction->bid) : 0);
-                                                            //minimal outbid
+    data << (uint32) 0;                                     //player_high_guid
+    data << (uint32) auction->startbid;                     //Auction->startbid
+    data << (uint32) auction->outBid;                       //minimal outbid...
     data << (uint32) auction->buyout;                       //auction->buyout
-    data << (uint32) (auction->time - time(NULL)) * 1000;   //time left
+    data << (uint32) (auction->time - time(NULL)) * 1000;   //time
     data << (uint32) auction->bidder;                       //auction->bidder current
-    data << (uint32) 0;                                     //player high_guid
+    data << (uint32) 0;                                     //player highguid
     data << (uint32) auction->bid;                          //current bid
     return true;
 }
@@ -159,8 +152,7 @@ void WorldSession::SendAuctionOwnerNotification( AuctionEntry* auction)
 void WorldSession::SendAuctionOutbiddedMail(AuctionEntry *auction, uint32 newPrice)
 {
     uint32 mailId = objmgr.GenerateMailID();
-    time_t dtime = time(NULL);                              //Instant since it's Auction House
-    time_t etime = dtime + (30 * DAY);
+    time_t etime = time(NULL) + (30 * DAY);
 
     std::ostringstream msgAuctionOutbiddedSubject;
     msgAuctionOutbiddedSubject << auction->item_template << ":0:" << AUCTION_OUTBIDDED;
@@ -169,21 +161,20 @@ void WorldSession::SendAuctionOutbiddedMail(AuctionEntry *auction, uint32 newPri
     Player *oldBidder = objmgr.GetPlayer(oldBidder_guid);
     if (oldBidder)
     {
-        oldBidder->GetSession()->SendAuctionBidderNotification( auction->location, auction->Id, _player->GetGUID(), newPrice, objmgr.GetAuctionOutBid(auction->bid), auction->item_template);
-        oldBidder->CreateMail(mailId, MAIL_AUCTION, auction->location, msgAuctionOutbiddedSubject.str(), 0, 0, 0, etime,dtime, auction->bid, 0, NOT_READ, NULL);
+        oldBidder->GetSession()->SendAuctionBidderNotification( auction->location, auction->Id, _player->GetGUID(), newPrice, auction->outBid, auction->item_template);
+        oldBidder->CreateMail(mailId, AUCTIONHOUSE_MAIL, auction->location, msgAuctionOutbiddedSubject.str(), 0, 0, 0, etime, auction->bid, 0, NOT_READ, NULL);
     }
 
-    sDatabase.PExecute("INSERT INTO `mail` (`id`,`messageType`,`sender`,`receiver`,`subject`,`itemTextId`,`item_guid`,`item_template`,`expire_time`,`deliver_time`,`money`,`cod`,`checked`) "
-        "VALUES ('%u', '%d', '%u', '%u', '%s', '0', '0', '0', '" I64FMTD "','" I64FMTD "', '%u', '0', '%d')",
-        mailId, MAIL_AUCTION, auction->location, auction->bidder, msgAuctionOutbiddedSubject.str().c_str(), (uint64)etime, (uint64)dtime, auction->bid, NOT_READ);
+    sDatabase.PExecute("INSERT INTO `mail` (`id`,`messageType`,`sender`,`receiver`,`subject`,`itemTextId`,`item_guid`,`item_template`,`time`,`money`,`cod`,`checked`) "
+        "VALUES ('%u', '%d', '%u', '%u', '%s', '0', '0', '0', '" I64FMTD "', '%u', '0', '%d')",
+        mailId, AUCTIONHOUSE_MAIL, auction->location, auction->bidder, msgAuctionOutbiddedSubject.str().c_str(), (uint64)etime, auction->bid, NOT_READ);
 }
 
 //this function sends mail, when auction is cancelled to old bidder
 void WorldSession::SendAuctionCancelledToBidderMail( AuctionEntry* auction )
 {
     uint32 mailId = objmgr.GenerateMailID();
-    time_t dtime = time(NULL);                              //Instant since it's Auction House
-    time_t etime = dtime + (30 * DAY);
+    time_t etime = time(NULL) + (30 * DAY);
 
     std::ostringstream msgAuctionCancelledSubject;
     msgAuctionCancelledSubject << auction->item_template << ":0:" << AUCTION_CANCELLED_TO_BIDDER;
@@ -193,12 +184,12 @@ void WorldSession::SendAuctionCancelledToBidderMail( AuctionEntry* auction )
     if (bidder)
     {
         // unknown : bidder->GetSession()->SendAuctionBidderNotification( auction->location, auction->Id, _player->GetGUID(), newPrice, newPrice - auction->bid, auction->item_template);
-        bidder->CreateMail(mailId, MAIL_AUCTION, auction->location, msgAuctionCancelledSubject.str(), 0, 0, 0, etime,dtime, auction->bid, 0, NOT_READ, NULL);
+        bidder->CreateMail(mailId, AUCTIONHOUSE_MAIL, auction->location, msgAuctionCancelledSubject.str(), 0, 0, 0, etime, auction->bid, 0, NOT_READ, NULL);
     }
 
-    sDatabase.PExecute("INSERT INTO `mail` (`id`,`messageType`,`sender`,`receiver`,`subject`,`itemTextId`,`item_guid`,`item_template`,`expire_time`,`deliver_time`,`money`,`cod`,`checked`) "
-        "VALUES ('%u', '%d', '%u', '%u', '%s', '0', '0', '0', '" I64FMTD "','" I64FMTD "', '%u', '0', '%d')",
-        mailId, MAIL_AUCTION, auction->location, auction->bidder, msgAuctionCancelledSubject.str().c_str(), (uint64)etime, (uint64)dtime, auction->bid, NOT_READ);
+    sDatabase.PExecute("INSERT INTO `mail` (`id`,`messageType`,`sender`,`receiver`,`subject`,`itemTextId`,`item_guid`,`item_template`,`time`,`money`,`cod`,`checked`) "
+        "VALUES ('%u', '%d', '%u', '%u', '%s', '0', '0', '0', '" I64FMTD "', '%u', '0', '%d')",
+        mailId, AUCTIONHOUSE_MAIL, auction->location, auction->bidder, msgAuctionCancelledSubject.str().c_str(), (uint64)etime, auction->bid, NOT_READ);
 }
 
 //this void creates new auction and adds auction to some auctionhouse
@@ -250,11 +241,9 @@ void WorldSession::HandleAuctionSellItem( WorldPacket & recv_data )
         return;
     }
 
-    if( GetSecurity() > SEC_PLAYER && sWorld.getConfig(CONFIG_GM_LOG_TRADE) )
-    {
-        sLog.outCommand("GM %s (Account: %u) create auction: %s (Entry: %u Count: %u)",
-            GetPlayerName(),GetAccountId(),it->GetProto()->Name1,it->GetEntry(),it->GetCount());
-    }
+    if( GetSecurity() > 0 && sWorld.getConfig(CONFIG_GM_LOG_TRADE) )
+        sLog.outCommand("GM auction: %s (Entry: %u Count: %u) GM: %s (Account: %u)",
+        it->GetProto()->Name1,it->GetEntry(),it->GetCount(),GetPlayerName(),GetAccountId());
 
     pl->ModifyMoney( ((int32) deposit) * -1 );
 
@@ -267,13 +256,14 @@ void WorldSession::HandleAuctionSellItem( WorldPacket & recv_data )
     AH->startbid = bid;
     AH->bidder = 0;
     AH->bid = 0;
+    AH->outBid = 0;
     AH->buyout = buyout;
     time_t base = time(NULL);
-    AH->time = ((time_t)(etime * 60 * sWorld.getRate(RATE_AUCTION_TIME))) + base;
+    AH->time = ((time_t)(etime * 60)) + base;
     AH->deposit = deposit;
     AH->location = location;
 
-    sLog.outDetail("selling item %u to auctioneer %u with initial bid %u with buyout %u and with time %u (in minutes) in location: %u", GUID_LOPART(item), GUID_LOPART(auctioneer), bid, buyout, etime, location);
+    sLog.outDetail("selling item %u to auctioneer %u with inital bid %u with buyout %u and with time %u (in minutes) in location: %u", GUID_LOPART(item), GUID_LOPART(auctioneer), bid, buyout, GUID_LOPART(time), location);
     mAuctions->AddAuction(AH);
 
     objmgr.AddAItem(it);
@@ -322,7 +312,7 @@ void WorldSession::HandleAuctionPlaceBid( WorldPacket & recv_data )
     Player *pl = GetPlayer();
     if ((auction) && (auction->owner != pl->GetGUIDLow()))
     {
-        if (price < (auction->bid + objmgr.GetAuctionOutBid(auction->bid)))
+        if (price < (auction->bid + auction->outBid))
         {
             //auction has already higher bid, client tests it!
             //SendAuctionCommandResult(auction->auctionId, AUCTION_PLACE_BID, ???);
@@ -336,6 +326,8 @@ void WorldSession::HandleAuctionPlaceBid( WorldPacket & recv_data )
         }
         if ((price < auction->buyout) || (auction->buyout == 0))
         {
+            auction->outBid += 5;                           //this line must be here
+
             if (auction->bidder > 0)
             {
                 if ( auction->bidder == pl->GetGUIDLow() )
@@ -355,9 +347,11 @@ void WorldSession::HandleAuctionPlaceBid( WorldPacket & recv_data )
             }
             auction->bidder = pl->GetGUIDLow();
             auction->bid = price;
+            if ( auction->outBid > 10000 )                  //one gold
+                auction->outBid = 5;
 
             // after this update we should save player's money ...
-            sDatabase.PExecute("UPDATE `auctionhouse` SET `buyguid` = '%u',`lastbid` = '%u' WHERE `id` = '%u'", auction->bidder, auction->bid, auction->Id);
+            sDatabase.PExecute("UPDATE `auctionhouse` SET `buyguid` = '%u',`lastbid` = '%u' WHERE `id` = '%u';", auction->bidder, auction->bid, auction->Id);
 
             SendAuctionCommandResult(auction->Id, AUCTION_PLACE_BID, AUCTION_OK, 0 );
         }
@@ -446,13 +440,12 @@ void WorldSession::HandleAuctionRemoveItem( WorldPacket & recv_data )
             msgAuctionCanceledOwner << auction->item_template << ":0:" << AUCTION_CANCELED;
 
             uint32 messageID = objmgr.GenerateMailID();
-            time_t dtime = time(NULL);                      //Instant since it's Auction House
-            time_t etime = dtime + (30 * DAY);
+            time_t etime = time(NULL) + (30 * DAY);
 
-            pl->CreateMail( messageID, MAIL_AUCTION, auction->location, msgAuctionCanceledOwner.str(), 0, auction->item_guid, auction->item_template, etime,dtime, 0, 0, 0, pItem);
-            sDatabase.PExecute("INSERT INTO `mail` (`id`,`messageType`,`sender`,`receiver`,`subject`,`itemTextId`,`item_guid`,`item_template`,`expire_time`,`deliver_time`,`money`,`cod`,`checked`) "
-                "VALUES ('%u', '%d', '%u', '%u', '%s', '0', '%u', '%u', '" I64FMTD "','" I64FMTD "', '0', '0', '%d')",
-                messageID, MAIL_AUCTION, auction->location , pl->GetGUIDLow() , msgAuctionCanceledOwner.str().c_str(), auction->item_guid, auction->item_template, (uint64)etime, (uint64)dtime, NOT_READ);
+            pl->CreateMail( messageID, AUCTIONHOUSE_MAIL, auction->location, msgAuctionCanceledOwner.str(), 0, auction->item_guid, auction->item_template, etime, 0, 0, 0, pItem);
+            sDatabase.PExecute("INSERT INTO `mail` (`id`,`messageType`,`sender`,`receiver`,`subject`,`itemTextId`,`item_guid`,`item_template`,`time`,`money`,`cod`,`checked`) "
+                "VALUES ('%u', '%d', '%u', '%u', '%s', '0', '%u', '%u', '" I64FMTD "', '0', '0', '0')",
+                messageID, AUCTIONHOUSE_MAIL, auction->location , pl->GetGUIDLow() , msgAuctionCanceledOwner.str().c_str(), auction->item_guid, auction->item_template, (uint64)etime);
 
         }
         else

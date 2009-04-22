@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright (C) 2005,2006,2007 MaNGOS <http://www.mangosproject.org/>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -219,17 +219,6 @@ uint32 Bag::GetItemCount( uint32 item, Item* eItem ) const
         if( pItem && pItem != eItem && pItem->GetEntry() == item )
             count += pItem->GetCount();
     }
-
-    if(eItem && eItem->GetProto()->GemProperties)
-    {
-        for(uint32 i=0; i < ContainerSlots; i++)
-        {
-            pItem = m_bagslot[i];
-            if( pItem && pItem != eItem && pItem->GetProto()->Socket[0].Color )
-                count += pItem->GetGemCountWithID(item);
-        }
-    }
-
     return count;
 }
 

@@ -92,16 +92,10 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode( WorldPacket & recv_data )
 
     sLog.outDebug( "WORLD: Received CMSG_QUESTGIVER_ACCEPT_QUEST npc = %u, quest = %u",uint32(GUID_LOPART(guid)),quest );
 
-    Object* pObject = ObjectAccessor::Instance().GetObjectByTypeMask(*_player, guid,TYPE_UNIT|TYPE_GAMEOBJECT|TYPE_ITEM|TYPE_PLAYER);
-
-    // no or incorrect quest giver
-    if(!pObject
-        || (pObject->GetTypeId()!=TYPEID_PLAYER && !pObject->hasQuest(quest))
-        || (pObject->GetTypeId()==TYPEID_PLAYER && !((Player*)pObject)->CanShareQuest(quest))
-      )
+    Object* pObject = ObjectAccessor::Instance().GetObjectByTypeMask(*_player, guid,TYPE_UNIT|TYPE_GAMEOBJECT|TYPE_ITEM);
+    if(!pObject||!pObject->hasQuest(quest))
     {
         _player->PlayerTalkClass->CloseGossip();
-        _player->SetDivider( 0 );
         return;
     }
 
@@ -112,7 +106,6 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode( WorldPacket & recv_data )
         if(!GetPlayer()->CanTakeQuest(qInfo,true) )
         {
             _player->PlayerTalkClass->CloseGossip();
-            _player->SetDivider( 0 );
             return;
         }
 
@@ -128,7 +121,7 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode( WorldPacket & recv_data )
 
         if( _player->CanAddQuest( qInfo, true ) )
         {
-            _player->AddQuest( qInfo, pObject );
+            _player->AddQuest( qInfo );
 
             if ( _player->CanCompleteQuest( quest ) )
                 _player->CompleteQuest( quest );
@@ -146,7 +139,7 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode( WorldPacket & recv_data )
                     bool destroyItem = true;
                     for(int i = 0; i < QUEST_OBJECTIVES_COUNT; i++)
                     {
-                        if ((qInfo->ReqItemId[i] == ((Item*)pObject)->GetEntry()) && (((Item*)pObject)->GetProto()->MaxCount != 0))
+                        if(qInfo->ReqItemId[i] == ((Item*)pObject)->GetEntry())
                         {
                             destroyItem = false;
                             break;
@@ -226,21 +219,9 @@ void WorldSession::HandleQuestgiverChooseRewardOpcode( WorldPacket & recv_data )
 
     sLog.outDetail( "WORLD: Received CMSG_QUESTGIVER_CHOOSE_REWARD npc = %u, quest = %u, reward = %u",uint32(GUID_LOPART(guid)),quest,reward );
 
-    Object* pObject = ObjectAccessor::Instance().GetObjectByTypeMask(*_player, guid,TYPE_UNIT|TYPE_GAMEOBJECT|TYPE_PLAYER);
-    if(!pObject)
+    Object* pObject = ObjectAccessor::Instance().GetObjectByTypeMask(*_player, guid,TYPE_UNIT|TYPE_GAMEOBJECT);
+    if(!pObject||!pObject->hasInvolvedQuest(quest))
         return;
-    
-    switch(pObject->GetTypeId())
-    {
-        case TYPEID_PLAYER:                                 // spell completed quest
-            if(((Player*)pObject)==_player && !_player->IsQuestSpellComplete(quest))
-                return;
-             break;
-        default:                                            // creature/GO completed quest
-            if(!pObject->hasInvolvedQuest(quest))
-                return;
-            break;
-    }
 
     Quest *pQuest = objmgr.QuestTemplates[quest];
     if( pQuest )
@@ -252,6 +233,7 @@ void WorldSession::HandleQuestgiverChooseRewardOpcode( WorldPacket & recv_data )
             switch(pObject->GetTypeId())
             {
                 case TYPEID_UNIT:
+                    _player->CalculateReputation( pQuest, guid );
                     if( !(Script->ChooseReward( _player, ((Creature*)pObject), pQuest, reward )) )
                     {
                         // Send next quest
@@ -266,11 +248,6 @@ void WorldSession::HandleQuestgiverChooseRewardOpcode( WorldPacket & recv_data )
                         if(Quest* nextquest = _player->GetNextQuest( guid ,pQuest ) )
                             _player->PlayerTalkClass->SendQuestGiverQuestDetails(nextquest,guid,true);
                     }
-                    break;
-                case TYPEID_PLAYER:
-                    // Send next quest
-                    if(Quest* nextquest = _player->GetNextQuest( guid ,pQuest ) )
-                        _player->PlayerTalkClass->SendQuestGiverQuestDetails(nextquest,guid,true);
                     break;
             }
         }
@@ -349,17 +326,15 @@ void WorldSession::HandleQuestLogRemoveQuest(WorldPacket& recv_data)
     {
         quest = _player->GetUInt32Value(PLAYER_QUEST_LOG_1_1 + 3*slot + 0);
 
-        if( quest )
-        {
-            if(!_player->TakeQuestSourceItem( quest, true ))
-                return;                                     // can't un-equip some items, reject quest cancel
-
-            _player->SetQuestStatus( quest, QUEST_STATUS_NONE);
-        }
         _player->SetUInt32Value(PLAYER_QUEST_LOG_1_1 + 3*slot + 0, 0);
         _player->SetUInt32Value(PLAYER_QUEST_LOG_1_1 + 3*slot + 1, 0);
         _player->SetUInt32Value(PLAYER_QUEST_LOG_1_1 + 3*slot + 2, 0);
 
+        if( quest )
+        {
+            _player->SetQuestStatus( quest, QUEST_STATUS_NONE);
+            _player->TakeQuestSourceItem( quest );
+        }
     }
 }
 
@@ -390,12 +365,7 @@ void WorldSession::HandleQuestComplete(WorldPacket& recv_data)
     if( pQuest )
     {
         if( _player->GetQuestStatus( quest ) != QUEST_STATUS_COMPLETE )
-        {
-            if( pQuest->IsRepeatable() )
-                _player->PlayerTalkClass->SendQuestGiverRequestItems(pQuest, guid, _player->CanCompleteRepeatableQuest(pQuest), false);
-            else
-                _player->PlayerTalkClass->SendQuestGiverRequestItems(pQuest, guid, false, false);
-        }
+            _player->PlayerTalkClass->SendQuestGiverRequestItems(pQuest, guid, false, false);
         else
             _player->PlayerTalkClass->SendQuestGiverRequestItems(pQuest, guid, true, false);
     }
@@ -425,16 +395,20 @@ void WorldSession::HandleQuestPushToParty(WorldPacket& recvPacket)
             if( pGroup )
             {
                 uint32 pguid = _player->GetGUID();
-                Group::MemberList const& members = pGroup->GetMembers();
-                for(Group::member_citerator itr = members.begin(); itr != members.end(); ++itr)
+                uint32 memberscount = pGroup->GetMembersCount();
+                for (uint32 i = 0; i < memberscount; i++)
                 {
-                    guid = itr->guid;
+                    guid = pGroup->GetMemberGUID(i);
                     if( guid !=  pguid )
                     {
                         Player *pPlayer = ObjectAccessor::Instance().FindPlayer(guid);
                         if( pPlayer )
                         {
-                            _player->SendPushToPartyResponse(pPlayer, QUEST_PARTY_MSG_SHARING_QUEST);
+                            WorldPacket data( MSG_QUEST_PUSH_RESULT, (8+4+1) );
+                            data << guid;
+                            data << uint32( QUEST_PARTY_MSG_SHARING_QUEST );
+                            data << uint8(0);
+                            _player->GetSession()->SendPacket(&data);
 
                             if( _player->GetDistanceSq( pPlayer ) > 100 )
                             {

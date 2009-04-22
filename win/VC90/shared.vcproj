@@ -442,43 +442,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\shared\Network\IFile.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\shared\Network\Ipv4Address.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\shared\Network\Ipv4Address.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\shared\Network\Ipv6Address.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\shared\Network\Ipv6Address.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\shared\Network\ISocketHandler.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\shared\Network\ISocketHandler.h"
-				>
-			</File>
-			<File
 				RelativePath="..\..\src\shared\Network\ListenSocket.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\shared\Network\Mutex.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\src\shared\Network\Mutex.h"
 				>
 			</File>
 			<File
@@ -490,11 +454,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\shared\Network\RandomNumber.cpp"
+				RelativePath="..\..\src\shared\Network\PoolSocket.cpp"
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\shared\Network\RandomNumber.h"
+				RelativePath="..\..\src\shared\Network\PoolSocket.h"
 				>
 			</File>
 			<File
@@ -514,10 +478,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\shared\Network\SctpSocket.h"
-				>
-			</File>
-			<File
 				RelativePath="..\..\src\shared\Network\Socket.cpp"
 				>
 			</File>
@@ -534,10 +494,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\shared\Network\SocketAddress.h"
-				>
-			</File>
-			<File
 				RelativePath="..\..\src\shared\Network\SocketHandler.cpp"
 				>
 			</File>
@@ -546,7 +502,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\shared\Network\sockets-config.h"
+				RelativePath="..\..\src\shared\Network\SocketThread.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\shared\Network\SocketThread.h"
 				>
 			</File>
 			<File
@@ -586,15 +546,15 @@
 				>
 			</File>
 			<File
-				RelativePath="..\..\src\shared\Network\Uid.h"
-				>
-			</File>
-			<File
 				RelativePath="..\..\src\shared\Network\Utility.cpp"
 				>
 			</File>
 			<File
 				RelativePath="..\..\src\shared\Network\Utility.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\src\shared\WorldPacket.h"
 				>
 			</File>
 		</Filter>

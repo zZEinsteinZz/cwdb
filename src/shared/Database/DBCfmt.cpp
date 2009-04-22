@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright (C) 2005,2006,2007 MaNGOS <http://www.mangosproject.org/>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -16,40 +16,32 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-const char AreaTableEntryfmt[]="iiinixxxxxissssssssxixxxxxx";
+const char AreaTableEntryfmt[]="iiinixxxxxixxxxxxxxxixxxx";
 const char BankBagSlotPricesEntryfmt[]="ni";
-const char BattlemasterListEntryfmt[]="niixxxxxxiiiixxssssssssx";
-const char ChatChannelsEntryfmt[]="iixssssssssxxxxxxxxxx";  // data not sorted (more compact store)
-const char ChrClassesEntryfmt[]="nxxixxxxxxxxxxxxxx";
-const char ChrRacesEntryfmt[]="nxixiixxixxxxissssssssxxxxx";
-const char CreatureFamilyfmt[]="nxxxxxiissssssssxx";
-const char DurabilityCostsfmt[]="niiiiiiiiiiiiiiiiiiiiiiiiiiiii";
-const char DurabilityQualityfmt[]="nf";
+const char ChrClassesEntryfmt[]="nxxixsxxxxxxxxxxx";
+const char ChrRacesEntryfmt[]="nxixxxxxixxxxxixisxxxxxxxxxxx";
+const char CreatureFamilyfmt[]="nxxxxxiisxxxxxxxxx";
 const char EmoteEntryfmt[]="nxixxxxxxxxxxxxxxxx";
-const char FactionEntryfmt[]="niiiiixxxxiiiixxxxissssssssxxxxxxxxxx";
+const char FactionEntryfmt[]="niiiiixxxxiiiixxxxisxxxxxxxxxxxxxxxxx";
 const char FactionTemplateEntryfmt[]="nixiiiiixxiiii";
-const char GemPropertiesEntryfmt[]="nixxi";
-const char ItemDisplayTemplateEntryfmt[]="nxxxxxxxxxxixxxxxxxxxxx";
-const char ItemExtendedCostEntryfmt[]="niiiiixxiiixx";
+const char ItemDisplayTemplateEntryfmt[]="ixxxxxxxxxxixxxxxxxxxxx";
 const char ItemRandomPropertiesfmt[]="nxiiixxxxxxxxxxx";
-const char ItemRandomSuffixfmt[]="nxxxxxxxxxxiiiiii";
-const char ItemSetEntryfmt[]="dssssssssxxxxxxxxxxxxxxxxxxiiiiiiiiiiiiiiiiii";
-const char LockEntryfmt[]="niiiiixxxiiiiixxxiixxxxxxxxxxxxxx";
-const char MapEntryfmt[]="nxixssssssssixxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+const char ItemSetEntryfmt[]="dsxxxxxxxxxxxxxxxxxxxxxxxxxiiiiiiiiiiiiiiiiii";
+const char LockEntryfmt[]="nxxxxxxxxixxxxxxxiixxxxxxxxxxxxxx";
+const char MapEntryfmt[]="nsixxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
 const char SkillLinefmt[]="nixssssssssxssssssssxi";
 const char SkillLineAbilityfmt[]="iinxxxxiixiixxx";
 const char SpellCastTimefmt[]="nixx";
 const char SpellDurationfmt[]="niii";
-const char SpellEntryfmt[]="niixiiiiiiixixiiiiixxiiiiiiiiiiiiiiiiiiifiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiffffffiiixxxiiiiiiiiiiiiiiifffiiiiiiiiiiiifffixiiissssssssxssssssssxxxxxxxxxxxxxxxxxxxiiiiiiiiixxfffxxxiii";
-//const char SpellFocusObjectfmt[]="nssssssssx";
-const char SpellItemEnchantmentfmt[]="niiiiiixxxiiissssssssxiiii";
-const char SpellItemEnchantmentConditionfmt[]="nbbbbbxxxxxbbbbbbbbbbiiiiiXXXXX";
+const char SpellEntryfmt[]="niixiiiiixiixiiixiiiiiiiiiiiiiiiiiiiifiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiffffffiiixxxiiiiiiiiiiiiiiifffiiiiiiiiiiiifffixiiissssssssissssssssixxxxxxxxxxxxxxxxxxiiiiiixiixxfffxxx";
+const char SpellFocusObjectfmt[]="nsxxxxxxxx";
+const char SpellItemEnchantmentfmt[]="nixxixxixxixxsxxxxxxxxii";
 const char SpellRadiusfmt[]="nfxf";
 const char SpellRangefmt[]="nffxxxxxxxxxxxxxxxxxxx";
 const char StableSlotPricesfmt[] = "ni";
 const char TalentEntryfmt[]="niiiiiiiixxxxixxixxxx";
 const char TalentTabEntryfmt[]="nxxxxxxxxxxxixx";
-const char TaxiNodesEntryfmt[]="nifffxxxxxxxxxii";
+const char TaxiNodesEntryfmt[]="nifffsxxxxxxxxii";
 const char TaxiPathEntryfmt[]="niii";
 const char TaxiPathNodeEntryfmt[]="diiifffii";
 const char WorldSafeLocsEntryfmt[]="nifffxxxxxxxxx";

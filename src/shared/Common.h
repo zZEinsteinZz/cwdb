@@ -43,12 +43,9 @@
 
 // we need to stick to 1 version or half of the stuff will work for someone
 // others will not and opposite
-// will only support WoW and WoW:TBC 2.0.12 client build 6546...
+// will only support 1.12.1 client (build 5875) and 1.12.2 client (build 6005)...
 
-#define EXPECTED_MANGOS_CLIENT_BUILD        {6546, 0}
-
-// must be the first thing to include for it to work
-#include "MemoryLeaks.h"
+#define EXPECTED_MANGOS_CLIENT_BUILD        {5875,6005,0}
 
 #ifdef HAVE_CONFIG_H
 # include <config.h>
@@ -84,11 +81,7 @@
 #if PLATFORM == PLATFORM_WIN32
 #  define FD_SETSIZE 1024
 #  include <winsock2.h>
-// XP winver - needed to compile with standard leak check in MemoryLeaks.h
-// uncomment later if needed
-//#define _WIN32_WINNT 0x0501
 #  include <ws2tcpip.h>
-//#undef WIN32_WINNT
 #else
 #  include <sys/types.h>
 #  include <sys/ioctl.h>
@@ -97,6 +90,8 @@
 #  include <unistd.h>
 #  include <netdb.h>
 #endif
+
+#include "MemoryLeaks.h"
 
 #if COMPILER == COMPILER_MICROSOFT
 
@@ -117,8 +112,8 @@
 #define SI64FMTD "%lld"
 #endif
 
-#define GUID_HIPART(x)   (uint32)((x) >> 32)
-#define GUID_LOPART(x)   (uint32)((x) & 0xFFFFFFFFULL)
+#define GUID_HIPART(x)   (*(((uint32*)&(x))+1))
+#define GUID_LOPART(x)   (*((uint32*)&(x)))
 #define MAKE_GUID(l, h)  uint64( uint32(l) | ( uint64(h) << 32 ) )
 
 #define atol(a) strtoul( a, NULL, 10)

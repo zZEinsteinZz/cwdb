@@ -26,37 +26,30 @@ void WorldSession::HandleChannelJoin(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1+1);
 
-    uint32 channel_id;
-    uint8 unknown;
-    std::string channelname, pass;
-
-    recvPacket >> channel_id >> unknown;
+    string channelname,pass;
     recvPacket >> channelname;
 
     // recheck
     CHECK_PACKET_SIZE(recvPacket,(channelname.size()+1)+1);
 
     recvPacket >> pass;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        cMgr->GetJoinChannel(channelname,channel_id)->Join(_player->GetGUID(),pass.c_str());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        cMgr->GetJoinChannel(channelname,GetPlayer())->Join(GetPlayer(),pass.c_str());
 }
 
 void WorldSession::HandleChannelLeave(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1);
 
-    uint32 unk;
-    std::string channelname;
-    recvPacket >> unk;
+    string channelname;
     recvPacket >> channelname;
 
     if(!channelname.length())
         return;
 
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
     {
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->Leave(_player->GetGUID(),true);
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->Leave(GetPlayer());
         cMgr->LeftChannel(channelname);
     }
 }
@@ -65,202 +58,188 @@ void WorldSession::HandleChannelList(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1);
 
-    std::string channelname;
+    string channelname;
     recvPacket >> channelname;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->List(_player->GetGUID());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->List(GetPlayer());
 }
 
 void WorldSession::HandleChannelPassword(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1+1);
 
-    std::string channelname, pass;
+    string channelname,pass;
     recvPacket >> channelname;
 
     // recheck
     CHECK_PACKET_SIZE(recvPacket,(channelname.size()+1)+1);
 
     recvPacket >> pass;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->Password(_player->GetGUID(),pass.c_str());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->Password(GetPlayer(),pass.c_str());
 }
 
 void WorldSession::HandleChannelSetOwner(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1+1);
 
-    std::string channelname, newp;
+    string channelname,newp;
     recvPacket >> channelname;
 
     // recheck
     CHECK_PACKET_SIZE(recvPacket,(channelname.size()+1)+1);
 
     recvPacket >> newp;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->SetOwner(_player->GetGUID(),newp.c_str());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->SetOwner(GetPlayer(),newp.c_str());
 }
 
 void WorldSession::HandleChannelOwner(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1);
 
-    std::string channelname;
+    string channelname;
     recvPacket >> channelname;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->GetOwner(_player->GetGUID());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->GetOwner(GetPlayer());
 }
 
 void WorldSession::HandleChannelModerator(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1+1);
 
-    std::string channelname, otp;
+    string channelname,otp;
     recvPacket >> channelname;
 
     // recheck
     CHECK_PACKET_SIZE(recvPacket,(channelname.size()+1)+1);
 
     recvPacket >> otp;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->SetModerator(_player->GetGUID(),otp.c_str());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->SetModerator(GetPlayer(),otp.c_str());
 }
 
 void WorldSession::HandleChannelUnmoderator(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1+1);
 
-    std::string channelname, otp;
+    string channelname,otp;
     recvPacket >> channelname;
 
     // recheck
     CHECK_PACKET_SIZE(recvPacket,(channelname.size()+1)+1);
 
     recvPacket >> otp;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->UnsetModerator(_player->GetGUID(),otp.c_str());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->UnsetModerator(GetPlayer(),otp.c_str());
 }
 
 void WorldSession::HandleChannelMute(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1+1);
 
-    std::string channelname, otp;
+    string channelname,otp;
     recvPacket >> channelname;
 
     // recheck
     CHECK_PACKET_SIZE(recvPacket,(channelname.size()+1)+1);
 
     recvPacket >> otp;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->SetMute(_player->GetGUID(),otp.c_str());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->SetMute(GetPlayer(),otp.c_str());
 }
 
 void WorldSession::HandleChannelUnmute(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1+1);
 
-    std::string channelname, otp;
+    string channelname,otp;
     recvPacket >> channelname;
 
     // recheck
     CHECK_PACKET_SIZE(recvPacket,(channelname.size()+1)+1);
 
     recvPacket >> otp;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->UnsetMute(_player->GetGUID(),otp.c_str());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->UnsetMute(GetPlayer(),otp.c_str());
 }
 
 void WorldSession::HandleChannelInvite(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1+1);
 
-    std::string channelname, otp;
+    string channelname,otp;
     recvPacket >> channelname;
 
     // recheck
     CHECK_PACKET_SIZE(recvPacket,(channelname.size()+1)+1);
 
     recvPacket >> otp;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->Invite(_player->GetGUID(),otp.c_str());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->Invite(GetPlayer(),otp.c_str());
 }
 
 void WorldSession::HandleChannelKick(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1+1);
 
-    std::string channelname, otp;
+    string channelname,otp;
     recvPacket >> channelname;
 
     // recheck
     CHECK_PACKET_SIZE(recvPacket,(channelname.size()+1)+1);
 
     recvPacket >> otp;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->Kick(_player->GetGUID(),otp.c_str());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->Kick(GetPlayer(),otp.c_str());
 }
 
 void WorldSession::HandleChannelBan(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1+1);
 
-    std::string channelname, otp;
+    string channelname,otp;
     recvPacket >> channelname;
 
     // recheck
     CHECK_PACKET_SIZE(recvPacket,(channelname.size()+1)+1);
 
     recvPacket >> otp;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->Ban(_player->GetGUID(),otp.c_str());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->Ban(GetPlayer(),otp.c_str());
 }
 
 void WorldSession::HandleChannelUnban(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1+1);
 
-    std::string channelname, otp;
+    string channelname,otp;
     recvPacket >> channelname;
 
     // recheck
     CHECK_PACKET_SIZE(recvPacket,(channelname.size()+1)+1);
 
     recvPacket >> otp;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->UnBan(_player->GetGUID(),otp.c_str());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->UnBan(GetPlayer(),otp.c_str());
 }
 
 void WorldSession::HandleChannelAnnounce(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1);
 
-    std::string channelname;
+    string channelname;
     recvPacket >> channelname;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->Announce(_player->GetGUID());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->Announce(GetPlayer());
 }
 
 void WorldSession::HandleChannelModerate(WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,1);
 
-    std::string channelname;
+    string channelname;
     recvPacket >> channelname;
-    if(ChannelMgr* cMgr = channelMgr(_player->GetTeam()))
-        if(Channel *chn = cMgr->GetChannel(channelname,_player))
-            chn->Moderate(_player->GetGUID());
+    if(ChannelMgr* cMgr = channelMgr(GetPlayer()->GetTeam()))
+        if(Channel *chn = cMgr->GetChannel(channelname,GetPlayer())) chn->Moderate(GetPlayer());
 }

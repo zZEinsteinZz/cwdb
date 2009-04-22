@@ -24,7 +24,6 @@
 #include "Common.h"
 #include "Policies/Singleton.h"
 #include "ItemPrototype.h"
-#include "ItemEnchantmentMgr.h"
 #include "ByteBuffer.h"
 #include "Util.h"
 
@@ -47,13 +46,6 @@ enum LootMethod
     MASTER_LOOT       = 2,
     GROUP_LOOT        = 3,
     NEED_BEFORE_GREED = 4
-};
-
-enum LootThreshold
-{
-    UNCOMMON          = 2,
-    RARE              = 3,
-    EPIC              = 4
 };
 
 enum PermissionTypes
@@ -91,21 +83,20 @@ struct LootItem
 {
     uint32  itemid;
     uint32  displayid;
-    uint32  randomSuffix;
-    int32   randomPropertyId;
+    uint32  randomPropertyId;
     uint8   count;
     bool    is_looted;
     bool    is_blocked;
     bool    is_ffa;                                         // free for all
 
     LootItem()
-        : itemid(0), displayid(0), randomSuffix(0), randomPropertyId(0), count(1), is_looted(true), is_blocked(false), is_ffa(true) {}
+        : itemid(0), displayid(0), randomPropertyId(0), count(1), is_looted(true), is_blocked(false), is_ffa(true) {}
 
-    LootItem(uint32 _itemid, uint32 _displayid, uint32 _randomSuffix, int32 _randomProp, bool _isffa, uint8 _count = 1)
-        : itemid(_itemid), displayid(_displayid), randomSuffix(_randomSuffix), randomPropertyId(_randomProp), count(_count), is_looted(false), is_blocked(false), is_ffa(_isffa) {}
+    LootItem(uint32 _itemid, uint32 _displayid, uint32 _randomProp, bool _isffa, uint8 _count = 1)
+        : itemid(_itemid), displayid(_displayid), randomPropertyId(_randomProp), count(_count), is_looted(false), is_blocked(false), is_ffa(_isffa) {}
 
-    LootItem(LootStoreItem const& li,uint8 _count, uint32 _randomSuffix = 0, int32 _randomProp = 0)
-        : itemid(li.itemid), displayid(li.displayid), randomSuffix(_randomSuffix), randomPropertyId(_randomProp), count(_count), is_looted(false), is_blocked(false), is_ffa(li.is_ffa) {}
+    LootItem(LootStoreItem const& li,uint8 _count, uint32 _randomProp = 0)
+        : itemid(li.itemid), displayid(li.displayid),  randomPropertyId(_randomProp), count(_count), is_looted(false), is_blocked(false), is_ffa(li.is_ffa) {}
 
     static bool looted(LootItem &itm) { return itm.is_looted; }
     static bool not_looted(LootItem &itm) { return !itm.is_looted; }
@@ -155,8 +146,8 @@ struct Loot
     void NotifyItemRemoved(uint8 lootIndex);
     void NotifyQuestItemRemoved(uint8 questIndex);
     void NotifyMoneyRemoved();
-    void AddLooter(uint64 GUID) { PlayersLooting.insert(GUID); }
-    void RemoveLooter(uint64 GUID) { PlayersLooting.erase(GUID); }
+    inline void AddLooter(uint64 GUID) { PlayersLooting.insert(GUID); }
+    inline void RemoveLooter(uint64 GUID) { PlayersLooting.erase(GUID); }
 };
 
 struct LootView
@@ -175,7 +166,6 @@ extern LootStore LootTemplates_Item;
 extern LootStore LootTemplates_Pickpocketing;
 extern LootStore LootTemplates_Skinning;
 extern LootStore LootTemplates_Disenchant;
-extern LootStore LootTemplates_Prospecting;
 
 QuestItemList* FillQuestLoot(Player* player, Loot *loot);
 void FillLoot(Loot *loot, uint32 loot_id, LootStore& store);

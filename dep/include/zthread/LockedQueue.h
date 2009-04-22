@@ -134,15 +134,6 @@ namespace ZThread {
       
       }
 
-      virtual T front()
-      {
-          Guard<LockType> g(_lock);
-
-          if(_queue.size() == 0)
-              throw NoSuchElement_Exception();
-
-          return _queue.front();
-      }
 
       /**
        * @see Queue::cancel()

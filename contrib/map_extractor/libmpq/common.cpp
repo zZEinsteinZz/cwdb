@@ -395,13 +395,7 @@ int libmpq_read_hashtable(mpq_archive *mpq_a) {
 
 	/* Read the hash table into the buffer */
 	bytes = mpq_a->header->hashtablesize * sizeof(mpq_hash);
-
-	#ifdef WIN32
-		_lseeki64(mpq_a->fd, mpq_a->header->hashtablepos, SEEK_SET);
-	#else
-		lseek64(mpq_a->fd, mpq_a->header->hashtablepos, SEEK_SET);
-	#endif
-
+	_lseek(mpq_a->fd, mpq_a->header->hashtablepos, SEEK_SET);
 	rb = _read(mpq_a->fd, mpq_a->hashtable, bytes);
 	if (rb != bytes) {
 		return LIBMPQ_EFILE_CORRUPT;
@@ -454,13 +448,7 @@ int libmpq_read_blocktable(mpq_archive *mpq_a) {
 	/* Read the block table into the buffer */
 	bytes = mpq_a->header->blocktablesize * sizeof(mpq_block);
 	memset(mpq_a->blocktable, 0, mpq_a->header->blocktablesize * sizeof(mpq_block));
-
-	#ifdef WIN32
-		_lseeki64(mpq_a->fd, mpq_a->header->blocktablepos, SEEK_SET);
-	#else
-		lseek64(mpq_a->fd, mpq_a->header->blocktablepos, SEEK_SET);
-	#endif	
-
+	_lseek(mpq_a->fd, mpq_a->header->blocktablepos, SEEK_SET);
 	rb = _read(mpq_a->fd, mpq_a->blocktable, bytes);
 	if (rb != bytes) {
 		return LIBMPQ_EFILE_CORRUPT;
@@ -519,12 +507,7 @@ int libmpq_file_read_block(mpq_archive *mpq_a, mpq_file *mpq_f, unsigned int blo
 		unsigned int nread;
 
 		if (mpq_f->mpq_b->filepos != mpq_a->filepos) {
-		#ifdef WIN32
-			_lseeki64(mpq_a->fd, mpq_f->mpq_b->filepos, SEEK_SET);
-		#else
-			lseek64(mpq_a->fd, mpq_f->mpq_b->filepos, SEEK_SET);
-
-		#endif
+			_lseek(mpq_a->fd, mpq_f->mpq_b->filepos, SEEK_SET);
 		}
 
 		/* Read block positions from begin of file. */
@@ -569,13 +552,7 @@ int libmpq_file_read_block(mpq_archive *mpq_a, mpq_file *mpq_f, unsigned int blo
 			if (mpq_f->blockpos[0] != nread) {
 
 				/* Try once again to detect file seed and decrypt the blocks */
-
-				#ifdef WIN32
-					_lseeki64(mpq_a->fd, mpq_f->mpq_b->filepos, SEEK_SET);
-				#else
-					lseek64(mpq_a->fd, mpq_f->mpq_b->filepos, SEEK_SET);
-				#endif				
-
+				_lseek(mpq_a->fd, mpq_f->mpq_b->filepos, SEEK_SET);
 				nread = _read(mpq_a->fd, mpq_f->blockpos, (mpq_f->nblocks + 1) * sizeof(int));
 				mpq_f->seed = libmpq_detect_fileseed(mpq_a, mpq_f->blockpos, nread);
 				libmpq_decrypt_block(mpq_a, mpq_f->blockpos, nread, mpq_f->seed - 1);
@@ -612,13 +589,7 @@ int libmpq_file_read_block(mpq_archive *mpq_a, mpq_file *mpq_f, unsigned int blo
 
 	/* Set file pointer, if necessary. */
 	if (mpq_a->filepos != readpos) {
-
-		#ifdef WIN32
-			mpq_a->filepos = _lseeki64(mpq_a->fd, readpos, SEEK_SET);
-		#else
-			mpq_a->filepos = lseek64(mpq_a->fd, readpos, SEEK_SET);
-		#endif	
-
+		mpq_a->filepos = _lseek(mpq_a->fd, readpos, SEEK_SET);
 	}
 
 	/* 15018F87 - Read all requested blocks. */

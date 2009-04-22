@@ -53,6 +53,14 @@ void GuardAI::MoveInLineOfSight(Unit *u)
     }
 }
 
+void GuardAI::HealBy(Unit *healer, uint32 amount_healed)
+{
+}
+
+void GuardAI::DamageInflict(Unit *healer, uint32 amount_healed)
+{
+}
+
 bool GuardAI::_needToStop() const
 {
     if( !i_creature.isAlive() || !i_creature.getVictim())
@@ -142,7 +150,7 @@ void GuardAI::UpdateAI(const uint32 diff)
 
         assert((i_victimGuid != 0) == (i_creature.getVictim() != NULL) && "i_victimGuid and i_creature.getVictim() not synchronized.");
 
-        if( i_creature.IsWithinDistInMap(i_creature.getVictim(), ATTACK_DISTANCE))
+        if( i_creature.IsWithinDistInMap(i_creature.getVictim(), ATTACK_DIST))
         {
             if( i_creature.isAttackReady() )
             {
@@ -156,16 +164,13 @@ void GuardAI::UpdateAI(const uint32 diff)
 bool GuardAI::IsVisible(Unit *pl) const
 {
     return i_creature.GetDistanceSq(pl) < sWorld.getConfig(CONFIG_SIGHT_GUARDER)
-        && pl->isVisibleForOrDetect(&i_creature,true);
+        && pl->isVisibleFor(&i_creature,true);
 }
 
 void GuardAI::AttackStart(Unit *u)
 {
     if( !u )
         return;
-
-    if (u->GetTypeId() == TYPEID_PLAYER)
-        i_creature.SendZoneUnderAttackMessage((Player*)u);
 
     //    DEBUG_LOG("Creature %s tagged a victim to kill [guid=%u]", i_creature.GetName(), u->GetGUIDLow());
     if(i_creature.Attack(u))

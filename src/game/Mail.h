@@ -15,8 +15,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
-#ifndef MANGOS_MAIL_H
-#define MANGOS_MAIL_H
 
 #define MAIL_BODY_ITEM_TEMPLATE 8383                        // - plain letter, A Dusty Unsent Letter: 889
 
@@ -53,18 +51,14 @@ enum MAIL_CHECKED
 enum MailMessageType
 {
     MAIL_NORMAL         = 0,
-    MAIL_AUCTION        = 2,
-    //MAIL_CREATURE       = 3,    // client send CMSG_CREATURE_QUERY on this mailmessagetype
-    //MAIL_GAMEOBJECT     = 4,    // client send CMSG_GAMEOBJECT_QUERY on this mailmessagetype
-    //MAIL_ITEM           = 5,    // client send CMSG_ITEM_QUERY on this mailmessagetype
-    MAIL_GM             = 6     // custom type, don't use it as real mailmessagetype for sending to client (use MAIL_NORMAL instead)
+    AUCTIONHOUSE_MAIL   = 2
 };
 
-enum Mail_state
+enum Mail_state                                             //mail state created isn't used, because it caused items duplication
 {
-    MAIL_STATE_UNCHANGED = 1,
-    MAIL_STATE_CHANGED   = 2,
-    MAIL_STATE_DELETED   = 3
+    UNCHANGED           = 1,
+    CHANGED             = 2,
+    DELETED             = 3
 };
 
 enum MailAuctionAnswers
@@ -87,11 +81,9 @@ struct Mail
     uint32 itemTextId;
     uint32 item_guid;
     uint32 item_template;
-    time_t expire_time;
-    time_t deliver_time;
+    time_t time;
     uint32 money;
     uint32 COD;
     uint32 checked;
     Mail_state state;
 };
-#endif

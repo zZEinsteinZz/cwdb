@@ -25,18 +25,6 @@
 
 ScriptsSet Script=NULL;
 
-void UnloadScriptingModule()
-{
-    if(Script)
-    {
-        //todo: some check if some func from script library is called right now
-        Script->ScriptsFree();
-        MANGOS_CLOSE_LIBRARY(Script->hScriptsLib);
-        delete Script;
-        Script = NULL;
-    }
-}
-
 bool LoadScriptingModule(char const* libName)
 {
     ScriptsSet testScript=new _ScriptSet;
@@ -52,6 +40,7 @@ bool LoadScriptingModule(char const* libName)
         delete testScript;
         return false;
     }
+    else printf("Scripts Library %s was successfully loaded.\n",name.c_str());
 
     if(   !(testScript->ScriptsInit         =(scriptCallScriptsInit         )MANGOS_GET_PROC_ADDR(testScript->hScriptsLib,"ScriptsInit"         ))
         ||!(testScript->ScriptsFree         =(scriptCallScriptsFree         )MANGOS_GET_PROC_ADDR(testScript->hScriptsLib,"ScriptsFree"         ))
@@ -70,23 +59,27 @@ bool LoadScriptingModule(char const* libName)
         ||!(testScript->ItemQuestAccept     =(scriptCallItemQuestAccept     )MANGOS_GET_PROC_ADDR(testScript->hScriptsLib,"ItemQuestAccept"     ))
         ||!(testScript->GOQuestAccept       =(scriptCallGOQuestAccept       )MANGOS_GET_PROC_ADDR(testScript->hScriptsLib,"GOQuestAccept"       ))
         ||!(testScript->ReceiveEmote        =(scriptCallReceiveEmote        )MANGOS_GET_PROC_ADDR(testScript->hScriptsLib,"ReceiveEmote"        ))
-        ||!(testScript->ItemUse             =(scriptCallItemUse             )MANGOS_GET_PROC_ADDR(testScript->hScriptsLib,"ItemUse"             ))
         ||!(testScript->GetAI               =(scriptCallGetAI               )MANGOS_GET_PROC_ADDR(testScript->hScriptsLib,"GetAI"               ))
         )
     {
-        printf("Error loading Scripts Library %s !\n Library missing required functions.",name.c_str());
         MANGOS_CLOSE_LIBRARY(testScript->hScriptsLib);
         delete testScript;
         return false;
     }
 
-    printf("Scripts Library %s was successfully loaded.\n",name.c_str());
-
     //heh we are still there :P we have a valid library
     //we reload script
-    UnloadScriptingModule();
-
+    if(Script)
+    {
+        ScriptsSet current =Script;
+        //todo: some check if some func from script library is called right now
+        Script=testScript;
+        current->ScriptsFree();
+        MANGOS_CLOSE_LIBRARY(current->hScriptsLib);
+        delete current;
+    }else
     Script=testScript;
+
     Script->ScriptsInit();
 
     return true;

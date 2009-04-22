@@ -56,6 +56,7 @@ void Totem::Update( uint32 time )
 void Totem::Summon()
 {
     sLog.outDebug("AddObject at Totem.cpp line 49");
+    AddToWorld();
     SetInstanceId(GetOwner()->GetInstanceId());
     MapManager::Instance().GetMap(GetMapId(), GetOwner())->Add((Creature*)this);
 
@@ -65,12 +66,8 @@ void Totem::Summon()
 
     AIM_Initialize();
 
-    switch(m_type)
-    {
-        case TOTEM_PASSIVE: CastSpell(this, m_spell, true); break;
-        case TOTEM_STATUE:  CastSpell(GetOwner(), m_spell, true); break;
-        default: break;
-    }
+    if (m_type == TOTEM_PASSIVE)
+        this->CastSpell(this, m_spell, true);
 }
 
 void Totem::UnSummon()
@@ -86,32 +83,19 @@ void Totem::UnSummon()
     Unit *owner = this->GetOwner();
     if (owner)
     {
-        // clear owenr's totem slot
-        for(int i = 0; i <4; ++i)
-        {
-            if(owner->m_TotemSlot[i]==GetGUID())
-            {
-                owner->m_TotemSlot[i] = 0;
-                break;
-            }
-        }
-
         owner->RemoveAurasDueToSpell(m_spell);
 
         //remove aura all party members too
         Group *pGroup = NULL;
-        if (owner->GetTypeId() == TYPEID_PLAYER)
-            // Not only the player can summon the totem (scripted AI)
-            pGroup = ((Player*)owner)->groupInfo.group;
+        pGroup = ((Player*)owner)->groupInfo.group;
         if (pGroup)
         {
-            Group::MemberList const& members = pGroup->GetMembers();
-            for(Group::member_citerator itr = members.begin(); itr != members.end(); ++itr)
+            for(uint32 p=0;p<pGroup->GetMembersCount();p++)
             {
-                if(!pGroup->SameSubGroup(owner->GetGUID(), &*itr))
+                if(!pGroup->SameSubGroup(owner->GetGUID(), pGroup->GetMemberGUID(p)))
                     continue;
 
-                Unit* Target = objmgr.GetPlayer(itr->guid);
+                Unit* Target = objmgr.GetPlayer(pGroup->GetMemberGUID(p));
                 if (Target) Target->RemoveAurasDueToSpell(m_spell);
             }
         }
@@ -150,12 +134,7 @@ void Totem::SetSpell(uint32 spellId)
     if(spellId)
     {
         SpellEntry const *spellinfo = sSpellStore.LookupEntry(spellId);
-        if ( spellinfo)
-        {
-            if(spellinfo->SpellIconID==2056)
-                m_type = TOTEM_STATUE;                      //Jewelery statue
-            else if(spellinfo->SpellFamilyFlags == 0x28000000 )
-                m_type = TOTEM_LAST_BURST;                  //For Fire Nova Totem and Corrupted Fire Nova Totem
-        }
+        if ( spellinfo && spellinfo->SpellFamilyFlags == 0x28000000 )
+            m_type = TOTEM_LAST_BURST;                      //For Fire Nova Totem and Corrupted Fire Nova Totem
     }
 }

@@ -23,7 +23,6 @@
 #include "Player.h"
 
 bool LoadScriptingModule(char const* libName = "");
-void UnloadScriptingModule();
 
 typedef void(MANGOS_IMPORT * scriptCallScriptsInit) ();
 typedef void(MANGOS_IMPORT * scriptCallScriptsFree) ();
@@ -43,7 +42,6 @@ typedef bool(MANGOS_IMPORT * scriptCallItemQuestAccept)(Player *player, Item *, 
 typedef bool(MANGOS_IMPORT * scriptCallGOQuestAccept)(Player *player, GameObject *, Quest *);
 typedef bool(MANGOS_IMPORT * scriptCallGOChooseReward)(Player *player, GameObject *, Quest *, uint32 opt );
 typedef bool(MANGOS_IMPORT * scriptCallReceiveEmote) ( Player *player, Creature *_Creature, uint32 emote );
-typedef bool(MANGOS_IMPORT * scriptCallItemUse) (Player *player, Item *_Item);
 typedef CreatureAI* (MANGOS_IMPORT * scriptCallGetAI) ( Creature *_Creature );
 
 typedef struct
@@ -66,7 +64,6 @@ typedef struct
     scriptCallItemQuestAccept ItemQuestAccept;
     scriptCallGOQuestAccept GOQuestAccept;
     scriptCallReceiveEmote ReceiveEmote;
-    scriptCallItemUse ItemUse;
     scriptCallGetAI GetAI;
 
     MANGOS_LIBRARY_HANDLE hScriptsLib;

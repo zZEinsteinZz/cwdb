@@ -23,19 +23,19 @@
 
 extern DatabaseMysql  sDatabase;
 
-const char CreatureInfofmt[]="iiissiiiiiiiiififfiiiiififiiiiffifiiiiiiiiiiiiiiiiiiiiiiiiiiisiis";
-const char CreatureDataAddonInfofmt[]="iiiiiiiiiiii";
-const char GameObjectInfofmt[]="iiisiifiiiiiiiiiiiiiiiiiiiiiiiis";
-const char ItemPrototypefmt[]="iiiissssiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiffiffiffiffiffiiiiiiiiiifiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiisiiiiiiiiiiiiiiiiiiiiiiiiiisi";
+const char ItemPrototypefmt[]="iiissssiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiffiffiffiffiffiiiiiiiiiifiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiisiiiiiiiiiiiiiisi";
+const char GameObjectInfofmt[]="iiisiifiiiiiiiiiis";
+const char CreatureInfofmt[]="iiissiiiiiiiiififfiiiiiififiiiiffifiiiiiiiiiiiiiiiiiiiiiiiiiiisiis";
 const char PageTextfmt[]="isi";
+const char SpellProcEventfmt[]="iiiiiif";
 const char SpellThreatfmt[]="ii";
 
-SQLStorage sCreatureStorage(CreatureInfofmt,"entry","creature_template");
-SQLStorage sCreatureDataAddonStorage(CreatureDataAddonInfofmt,"guid","creature_addon");
-SQLStorage sGOStorage(GameObjectInfofmt,"entry","gameobject_template");
-SQLStorage sItemStorage(ItemPrototypefmt,"entry","item_template");
-SQLStorage sPageTextStore(PageTextfmt,"entry","page_text");
-SQLStorage sSpellThreatStore(SpellThreatfmt,"entry","spell_threat");
+SQLStorage sCreatureStorage(CreatureInfofmt,"creature_template");
+SQLStorage sGOStorage(GameObjectInfofmt,"gameobject_template");
+SQLStorage sItemStorage(ItemPrototypefmt,"item_template");
+SQLStorage sPageTextStore(PageTextfmt,"page_text");
+SQLStorage sSpellProcEventStore(SpellProcEventfmt,"spell_proc_event");
+SQLStorage sSpellThreatStore(SpellThreatfmt,"spell_threat");
 
 void FreeStorage(SQLStorage * p)
 {
@@ -48,16 +48,16 @@ void SQLStorage::Free ()
     for(uint32 x=0;x<iNumFields;x++)
         if(format[x]==FT_STRING)
     {
-        for(uint32 y=0;y<MaxEntry;y++)
-            if(pIndex[y])
-                delete [] *(char**)((char*)(pIndex[y])+offset);
+        for(uint32 y=0;y<iOldNumRecords;y++)
+            if(pOldIndex[y])
+                delete [] ((char*)(pOldIndex[y])+offset);
 
         offset+=sizeof(char*);
 
     }else offset+=4;
 
-    delete [] pIndex;
-    delete [] data;
+    delete [] pOldIndex;
+    delete [] pOldData;
 
 }
 
@@ -65,7 +65,7 @@ void SQLStorage::Load ()
 {
     uint32 maxi;
     Field *fields;
-    QueryResult *result  = sDatabase.PQuery("SELECT MAX(`%s`) FROM `%s`",entry_field,table);
+    QueryResult *result  = sDatabase.PQuery("SELECT MAX(`entry`) FROM `%s`",table);
     if(!result)
     {
         sLog.outError("Error loading `%s` table (not exist?)\n",table);
@@ -163,6 +163,10 @@ void SQLStorage::Load ()
 
     if(data)                                                //Reload table
         AddEvent((EventHandler)(&FreeStorage),this,20000);
+
+    pOldData=data;
+    pOldIndex=pIndex;
+    iOldNumRecords=MaxEntry;
 
     pIndex =newIndex;
     MaxEntry=maxi;

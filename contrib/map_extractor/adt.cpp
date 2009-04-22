@@ -17,6 +17,8 @@
 unsigned int iRes=256;
 extern uint16*areas;
 
+
+
 vec wmoc;
 
 Cell * cell;
@@ -304,6 +306,7 @@ return ((a*p->x+c*p->z-d)/b);
 inline
 double GetZ(double x,double z)
 {
+
 	vec v[3];
 	vec p;
 	
@@ -355,6 +358,7 @@ double GetZ(double x,double z)
 
 		return -solve(v,&p);
 	}
+	
 }
 
 inline
@@ -397,13 +401,14 @@ void TransformData()
 	delete mcells;
 }
 
-const char MAP_MAGIC[] = "MAP_1.02";
+const char MAP_MAGIC[] = "MAP_1.01";
 
 bool ConvertADT(char * filename,char * filename2)
 {
+
 //	if(!strstr(filename,"oth_32_48"))return false;
 	if(!LoadADT(filename))return false;
-
+	
 	FILE *output=fopen(filename2,"wb");
 	if(!output)
 	{
@@ -414,25 +419,24 @@ bool ConvertADT(char * filename,char * filename2)
     // write magic header
     fwrite(MAP_MAGIC,1,8,output);
 
-    for(unsigned int x=0;x<16;x++)
-    {
-        for(unsigned int y=0;y<16;y++)
-        {
-            if(mcells->ch[y][x].area_id && mcells->ch[y][x].area_id < 0xf77)
-            {
-                if(areas[mcells->ch[y][x].area_id]==0xffff)
-                    printf("\nCan't find area flag for areaid %u.\n",mcells->ch[y][x].area_id);
-
-                fwrite(&areas[mcells->ch[y][x].area_id],1,2,output);
-            }
-            else
-            {
-                uint16	flag=0xffff;
-                fwrite(&flag,1,2,output);
-            }
-        }
-    }
-
+	for(unsigned int x=0;x<16;x++)
+	for(unsigned int y=0;y<16;y++)
+	{
+		if(mcells->ch[y][x].area_id)
+		{
+			if(areas[mcells->ch[y][x].area_id]==0xffff)
+				printf("\nCan't find area flag for areaid %d.\n",mcells->ch[y][x].area_id);
+		
+			fwrite(&areas[mcells->ch[y][x].area_id],1,2,output);
+		
+		}
+		else
+		{
+			uint16	flag=0xffff;
+			fwrite(&flag,1,2,output);
+		}
+	}
+	
     for(unsigned int x=0;x<16;x++)
         for(unsigned int y=0;y<16;y++)
             fwrite(&mcells->ch[y][x].flag,1,1,output);
@@ -453,8 +457,12 @@ bool ConvertADT(char * filename,char * filename2)
 					(((double)(y))*TILESIZE)/((double)(iRes-1)),
 					(((double)(x))*TILESIZE)/((double)(iRes-1)));
 
+
+
+
 		fwrite(&z,1,sizeof(z),output);
 	}
+	
 
 	fclose(output);
 	delete cell;
@@ -476,3 +484,4 @@ bool ConvertADT(char * filename,char * filename2)
 	return true;
 
 }
+

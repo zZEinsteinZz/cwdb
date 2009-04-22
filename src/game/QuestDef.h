@@ -29,7 +29,7 @@ class Player;
 class ObjectMgr;
 
 // (PLAYER_VISIBLE_ITEM_1_CREATOR - PLAYER_QUEST_LOG_1_1)/3
-#define MAX_QUEST_LOG_SIZE 25
+#define MAX_QUEST_LOG_SIZE 20
 
 #define QUEST_OBJECTIVES_COUNT 4
 #define QUEST_SOURCE_ITEM_IDS_COUNT 4
@@ -37,9 +37,8 @@ class ObjectMgr;
 #define QUEST_REWARDS_COUNT 4
 #define QUEST_DEPLINK_COUNT 10
 #define QUEST_REPUTATIONS_COUNT 5
-#define QUEST_EMOTE_COUNT 4
 
-enum QuestFailedReasons
+enum
 {
     INVALIDREASON_DONT_HAVE_REQ        = 0,
     INVALIDREASON_DONT_HAVE_REQLEVEL   = 1,
@@ -50,7 +49,7 @@ enum QuestFailedReasons
     INVALIDREASON_DONT_HAVE_REQ_MONEY  = 21+1,              //1.12.1
 };
 
-enum QuestShareMessages
+enum
 {
     QUEST_PARTY_MSG_SHARING_QUEST   = 0,
     QUEST_PARTY_MSG_CANT_TAKE_QUEST = 1,
@@ -114,11 +113,6 @@ enum __QuestSpecialFlags                                    //according to mango
     QUEST_SPECIAL_FLAGS_TIMED         = 16,
     //QUEST_SPECIAL_FLAGS_REPEATABLE    = 32,               // meaning of flag 32 unknown
     QUEST_SPECIAL_FLAGS_REPUTATION    = 64,
-    //QUEST_SPECIAL_FLAGS_UNK1          = 128,              // unknown tbc
-    //QUEST_SPECIAL_FLAGS_UNK2          = 256,              // unknown tbc, bring items?
-    //QUEST_SPECIAL_FLAGS_UNK3          = 512,              // unknown tbc
-    //QUEST_SPECIAL_FLAGS_UNK4          = 1024,             // unknown tbc
-    //QUEST_SPECIAL_FLAGS_UNK5          = 2048,             // unknown tbc
 };
 
 // This Quest class provides a convenient way to access a few pretotaled (cached) quest details,
@@ -135,15 +129,17 @@ class Quest
 
         // table data accessors:
         uint32 GetQuestId() { return QuestId; }
-        int32  GetZoneOrSort() { return ZoneOrSort; }
+        uint32 GetZoneId() { return ZoneId; }
+        uint32 GetQuestSort() { return QuestSort; }
         uint32 GetMinLevel() { return MinLevel; }
         uint32 GetQuestLevel() { return QuestLevel; }
         uint32 GetType() { return Type; }
         uint32 GetRequiredRaces() { return RequiredRaces; }
+        uint32 GetRequiredClass() { return RequiredClass; }
+        uint32 GetRequiredSkill() { return RequiredSkill; }
         uint32 GetRequiredSkillValue() { return RequiredSkillValue; }
         uint32 GetRequiredRepFaction() { return RequiredRepFaction; }
         uint32 GetRequiredRepValue() { return RequiredRepValue; }
-        uint32 GetSuggestedPlayers() { return SuggestedPlayers; }
         uint32 GetLimitTime() { return LimitTime; }
         int32  GetNextQuestId() { return NextQuestId; }
         uint32 GetExclusiveGroup() { return ExclusiveGroup; }
@@ -158,18 +154,17 @@ class Quest
         const char* GetRequestItemsText() { return RequestItemsText.c_str(); }
         const char* GetEndText() { return EndText.c_str(); }
         int32  GetRewOrReqMoney() { return RewOrReqMoney; }
-        uint32 GetRewXpOrMoney() { return RewXpOrMoney; }
+        uint32 GetRewXP() { return RewXP; }
         uint32 GetRewSpell() { return RewSpell; }
         uint32 GetPointMapId() { return PointMapId; }
         float  GetPointX() { return PointX; }
         float  GetPointY (){ return PointY; }
         uint32 GetPointOpt() { return PointOpt; }
-        uint32 GetIncompleteEmote() { return IncompleteEmote; }
-        uint32 GetCompleteEmote() { return CompleteEmote; }
-        uint32 GetQuestStartScript() { return QuestStartScript; }
+        uint32 GetOfferRewardEmote() { return OfferRewardEmote; }
+        uint32 GetRequestItemsEmote() { return RequestItemsEmote; }
         uint32 GetQuestCompleteScript() { return QuestCompleteScript; }
         bool   IsRepeatable() { return bool(Repeatable); }
-        bool   IsAutoComplete() { return Objectives.size() == 0; }
+        bool   IsAutoComplete() { return strlen(GetObjectives()) == 0; }
         uint32 GetSpecialFlags() { return SpecialFlags; }
 
         // multiple values
@@ -188,8 +183,6 @@ class Quest
         uint32 RewItemCount[QUEST_REWARDS_COUNT];
         uint32 RewRepFaction[QUEST_REPUTATIONS_COUNT];
         int32  RewRepValue[QUEST_REPUTATIONS_COUNT];
-        uint32 DetailsEmote[QUEST_EMOTE_COUNT];
-        uint32 OfferRewardEmote[QUEST_EMOTE_COUNT];
 
         uint32 GetReqItemsCount() { return m_reqitemscount; }
         uint32 GetReqCreatureOrGOcount() { return m_reqCreatureOrGOcount; }
@@ -209,15 +202,17 @@ class Quest
         // table data
     protected:
         uint32 QuestId;
-        int32  ZoneOrSort;
+        uint32 ZoneId;
+        uint32 QuestSort;
         uint32 MinLevel;
         uint32 QuestLevel;
         uint32 Type;
         uint32 RequiredRaces;
+        uint32 RequiredClass;
+        uint32 RequiredSkill;
         uint32 RequiredSkillValue;
         uint32 RequiredRepFaction;
         uint32 RequiredRepValue;
-        uint32 SuggestedPlayers;
         uint32 LimitTime;
         uint32 SpecialFlags;
         int32  PrevQuestId;
@@ -234,15 +229,14 @@ class Quest
         std::string RequestItemsText;
         std::string EndText;
         int32  RewOrReqMoney;
-        uint32 RewXpOrMoney;
+        uint32 RewXP;
         uint32 RewSpell;
         uint32 PointMapId;
         float  PointX;
         float  PointY;
         uint32 PointOpt;
-        uint32 IncompleteEmote;
-        uint32 CompleteEmote;
-        uint32 QuestStartScript;
+        uint32 OfferRewardEmote;
+        uint32 RequestItemsEmote;
         uint32 QuestCompleteScript;
         uint32 Repeatable;
 };
@@ -258,7 +252,7 @@ struct quest_status
 {
     quest_status()
         : m_quest(NULL), m_status(QUEST_STATUS_NONE),m_rewarded(false),m_explored(false),
-        m_spellComplete(false), m_timer(0), uState(QUEST_NEW)
+        m_timer(0), uState(QUEST_NEW)
     {
         memset(m_itemcount,    0, QUEST_OBJECTIVES_COUNT * sizeof(uint32));
         memset(m_creatureOrGOcount, 0, QUEST_OBJECTIVES_COUNT * sizeof(uint32));
@@ -269,7 +263,6 @@ struct quest_status
     QuestStatus m_status;
     bool m_rewarded;
     bool m_explored;
-    bool m_spellComplete;                                   // used to bypass anti-cheat checking in case Spell::EffectQuestComplete when player guid send instead creature/GO
     uint32 m_timer;
     QuestUpdateState uState;
 

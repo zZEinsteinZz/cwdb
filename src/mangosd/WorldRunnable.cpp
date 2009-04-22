@@ -26,7 +26,6 @@
 #include "Timer.h"
 #include "ObjectAccessor.h"
 #include "MapManager.h"
-#include "EventSystem.h"
 
 #include "Database/DatabaseEnv.h"
 
@@ -61,12 +60,9 @@ void WorldRunnable::run()
     }
 
     sWorld.KickAll();                                       // save and kick all players
-    sWorld.UpdateSessions( 1 );                             // real players unload required UpdateSessions call
 
     MapManager::Instance().UnloadAll();                     // unload all grids (including locked in memory)
 
-    ///- End the database thread    
+    ///- End the database thread
     sDatabase.ThreadEnd();                                  // free mySQL thread resources
-
-    StopEventSystem();
 }

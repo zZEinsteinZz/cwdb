@@ -22,7 +22,6 @@
 #include "MovementGenerator.h"
 #include "DestinationHolder.h"
 #include "Traveller.h"
-#include "FollowerReference.h"
 
 class Unit;
 
@@ -30,8 +29,8 @@ class MANGOS_DLL_SPEC TargetedMovementGenerator : public MovementGenerator
 {
     public:
 
-        TargetedMovementGenerator(Unit &target) : i_offset(0), i_angle(0) { i_target.link(&target, this); }
-        TargetedMovementGenerator(Unit &target, float offset, float angle) : i_offset(offset), i_angle(angle) { i_target.link(&target, this); }
+        TargetedMovementGenerator(Unit &target) : i_target(target), i_offset(0), i_angle(0) {}
+        TargetedMovementGenerator(Unit &target, float offset, float angle) : i_target(target), i_offset(offset), i_angle(angle) {}
         ~TargetedMovementGenerator() {}
 
         void Initialize(Creature &);
@@ -40,14 +39,12 @@ class MANGOS_DLL_SPEC TargetedMovementGenerator : public MovementGenerator
         MovementGeneratorType GetMovementGeneratorType() { return TARGETED_MOTION_TYPE; }
 
         void spellAtack(Creature &,Unit &,uint32 spellId);
-        void stopFollowing() { };
 
     private:
 
         void _spellAtack(Creature &owner, SpellEntry* spellInfo);
         void _setTargetLocation(Creature &);
-
-        FollowerReference i_target;
+        Unit &i_target;
         float i_offset;
         float i_angle;
         DestinationHolder<Traveller<Creature> > i_destinationHolder;

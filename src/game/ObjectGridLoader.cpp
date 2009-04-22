@@ -17,8 +17,8 @@
  */
 
 #include "ObjectGridLoader.h"
+#include "Database/DatabaseEnv.h"
 #include "ObjectAccessor.h"
-#include "ObjectMgr.h"
 #include "MapManager.h"
 #include "RedZoneDistrict.h"
 #include "Creature.h"
@@ -34,8 +34,7 @@ class MANGOS_DLL_DECL ObjectGridRespawnMover
         void Move(GridType &grid);
 
         template<class T> void Visit(std::map<OBJECT_HANDLE, T *> &m) {}
-        template<class T> void Visit(std::map<OBJECT_HANDLE, CountedPtr<T> > &m) {}
-        void Visit(CreatureMapType &m);
+        void Visit(std::map<OBJECT_HANDLE, Creature *> &m);
 };
 
 void
@@ -46,7 +45,7 @@ ObjectGridRespawnMover::Move(GridType &grid)
 }
 
 void
-ObjectGridRespawnMover::Visit(CreatureMapType &m)
+ObjectGridRespawnMover::Visit(std::map<OBJECT_HANDLE, Creature *> &m)
 {
     if( m.size() == 0 )
         return;
@@ -54,7 +53,7 @@ ObjectGridRespawnMover::Visit(CreatureMapType &m)
     // creature in unloading grid can have respawn point in another grid
     // if it will be unloaded then it will not respawn in original grid until unload/load original grid
     // move to respwn point to prevent this case. For player view in respawn grid this wll be normal respawn.
-    for(CreatureMapType::iterator iter=m.begin(), next; iter != m.end(); iter = next)
+    for(std::map<OBJECT_HANDLE, Creature* >::iterator iter=m.begin(), next; iter != m.end(); iter = next)
     {
         next = iter; ++next;
 
@@ -77,10 +76,6 @@ ObjectGridRespawnMover::Visit(CreatureMapType &m)
     }
 }
 
-template<class T> void addUnitState(CountedPtr<T> &obj, CellPair const& cell_pair)
-{
-}
-
 template<class T> void addUnitState(T *obj, CellPair const& cell_pair)
 {
 }
@@ -90,99 +85,102 @@ template<> void addUnitState(Creature *obj, CellPair const& cell_pair)
     Cell cell = RedZone::GetZone(cell_pair);
 
     obj->SetCurrentCell(cell);
-    if(obj->isSpiritService())
+    if( obj->isSpiritHealer())
         obj->setDeathState(DEAD);
 }
 
 template <class T>
-void LoadHelper(CellGuidSet const& guid_set, CellPair &cell, std::map<OBJECT_HANDLE, T*> &m, uint32 &count, Map* map)
+void LoadHelper(QueryResult *result, CellPair &cell, std::map<OBJECT_HANDLE, T*> &m, uint32 &count, Map* map)
 {
-    bool generateGuid = map->Instanceable();
-
-    for(CellGuidSet::const_iterator i_guid = guid_set.begin(); i_guid != guid_set.end(); ++i_guid)
+    if( result )
     {
-        T* obj = new T(NULL);
-        uint32 guid = *i_guid;
-        //sLog.outString("DEBUG: LoadHelper from table: %s for (guid: %u) Loading",table,guid);
-        if(!obj->LoadFromDB(guid, map->GetInstanceId()))
+        bool generateGuid = map->Instanceable();
+
+        do
         {
-            //delete obj;
-            continue;
-        }
+            Field *fields = result->Fetch();
+            T *obj = new T( NULL );
+            uint32 guid = fields[result->GetFieldCount()-1].GetUInt32();
+            //sLog.outString("DEBUG: LoadHelper from table: %s for (guid: %u) Loading",table,guid);
+            if(!obj->LoadFromDB(guid, result, map->GetInstanceId()))
+            {
+                delete obj;
+                continue;
+            }
+            else
+            {
+                // Check loaded cell/grid integrity
+                Cell old_cell = RedZone::GetZone(cell);
 
-        obj->SetInstanceId(map->GetInstanceId());
-        m[obj->GetGUID()] = obj;
+                CellPair pos_val = MaNGOS::ComputeCellPair(obj->GetPositionX(), obj->GetPositionY());
+                Cell pos_cell = RedZone::GetZone(pos_val);
 
-        addUnitState(obj,cell);
-        obj->AddToWorld();
-        ++count;
+                if(old_cell != pos_cell)
+                {
+                    sLog.outError("Object (GUID: %u TypeId: %u Entry: %u) loaded (X: %f Y: %f) to grid[%u,%u]cell[%u,%u] instead grid[%u,%u]cell[%u,%u].", obj->GetGUIDLow(), obj->GetGUIDHigh(), obj->GetEntry(), obj->GetPositionX(), obj->GetPositionY(), old_cell.GridX(), old_cell.GridY(), old_cell.CellX(), old_cell.CellY(), pos_cell.GridX(), pos_cell.GridY(), pos_cell.CellX(), pos_cell.CellY());
+                    delete obj;
+                    continue;
+                }
+            }
 
-    }
-}
+            obj->SetInstanceId(map->GetInstanceId());
+            m[obj->GetGUID()] = obj;
 
-void LoadHelper(CellCorpseSet const& cell_corpses, CellPair &cell, std::map<OBJECT_HANDLE, CountedPtr<Corpse> > &m, uint32 &count, Map* map)
-{
-    if(cell_corpses.empty())
-        return;
+            addUnitState(obj,cell);
+            obj->AddToWorld();
+            ++count;
 
-    bool generateGuid = map->Instanceable();
-    CountedPtr<Corpse> obj;
-
-    for(CellCorpseSet::const_iterator itr = cell_corpses.begin(); itr != cell_corpses.end(); ++itr)
-    {
-        if(itr->second != map->GetInstanceId())
-            continue;
-
-        uint32 player_guid = itr->first;
-
-        obj = ObjectAccessor::Instance().GetCorpseForPlayerGUID(player_guid);
-        if(!obj)
-            continue;
-
-        m[obj->GetGUID()] = obj;
-
-        addUnitState(obj,cell);
-        obj->AddToWorld();
-        ++count;
+        }while( result->NextRow() );
+        delete result;
     }
 }
 
 void
-ObjectGridLoader::Visit(GameObjectMapType &m)
+ObjectGridLoader::Visit(std::map<OBJECT_HANDLE, GameObject *> &m)
 {
     uint32 x = (i_cell.GridX()*MAX_NUMBER_OF_CELLS) + i_cell.CellX();
     uint32 y = (i_cell.GridY()*MAX_NUMBER_OF_CELLS) + i_cell.CellY();
     CellPair cell_pair(x,y);
     uint32 cell_id = (cell_pair.y_coord*TOTAL_NUMBER_OF_CELLS_PER_MAP) + cell_pair.x_coord;
-
-    CellObjectGuids const& cell_guids = objmgr.GetCellObjectGuids(i_map->GetId(), cell_id);
-
-    LoadHelper(cell_guids.gameobjects, cell_pair, m, i_gameObjects, i_map);
+    QueryResult *result = sDatabase.PQuery(
+    //      0    1                  2                         3                         4            5             6           7           8           9           10     11              12             13         14            15
+        "SELECT `id`,`gameobject`.`map`,`gameobject`.`position_x`,`gameobject`.`position_y`,`position_z`,`orientation`,`rotation0`,`rotation1`,`rotation2`,`rotation3`,`loot`,`spawntimesecs`,`animprogress`,`dynflags`,`respawntime`,`gameobject`.`guid` "
+        "FROM `gameobject` LEFT JOIN `gameobject_grid` ON `gameobject`.`guid` = `gameobject_grid`.`guid` "
+        "LEFT JOIN `gameobject_respawn` ON ((`gameobject`.`guid`=`gameobject_respawn`.`guid`) AND (`gameobject_respawn`.`instance` = '%u')) "
+        "WHERE `grid` = '%u' AND `cell` = '%u' AND `gameobject_grid`.`map` = '%u'", i_map->GetInstanceId(), i_grid.GetGridId(), cell_id, i_map->GetId());
+    LoadHelper(result, cell_pair, m, i_gameObjects, i_map);
 }
 
 void
-ObjectGridLoader::Visit(CreatureMapType &m)
+ObjectGridLoader::Visit(std::map<OBJECT_HANDLE, Creature *> &m)
 {
     uint32 x = (i_cell.GridX()*MAX_NUMBER_OF_CELLS) + i_cell.CellX();
     uint32 y = (i_cell.GridY()*MAX_NUMBER_OF_CELLS) + i_cell.CellY();
     CellPair cell_pair(x,y);
     uint32 cell_id = (cell_pair.y_coord*TOTAL_NUMBER_OF_CELLS_PER_MAP) + cell_pair.x_coord;
-
-    CellObjectGuids const& cell_guids = objmgr.GetCellObjectGuids(i_map->GetId(), cell_id);
-
-    LoadHelper(cell_guids.creatures, cell_pair, m, i_gameObjects, i_map);
+    QueryResult *result = sDatabase.PQuery(
+    //          0    1                2                       3                       4            5             6               7           8                  9                  10                 11          12        13            14      15             16      17
+        "SELECT `id`,`creature`.`map`,`creature`.`position_x`,`creature`.`position_y`,`position_z`,`orientation`,`spawntimesecs`,`spawndist`,`spawn_position_x`,`spawn_position_y`,`spawn_position_z`,`curhealth`,`curmana`,`respawntime`,`state`,`MovementType`,`auras`,`creature`.`guid`"
+        "FROM `creature` LEFT JOIN `creature_grid` ON `creature`.`guid` = `creature_grid`.`guid` "
+        "LEFT JOIN `creature_respawn` ON ((`creature`.`guid`=`creature_respawn`.`guid`) AND (`creature_respawn`.`instance` = '%u'))"
+        "WHERE `grid` = '%u' AND `cell` = '%u' AND `creature_grid`.`map` = '%u' ", i_map->GetInstanceId(), i_grid.GetGridId(), cell_id, i_map->GetId());
+    LoadHelper(result, cell_pair, m, i_creatures, i_map);
 }
 
 void
-ObjectGridLoader::Visit(CorpseMapType &m)
+ObjectGridLoader::Visit(std::map<OBJECT_HANDLE, Corpse *> &m)
 {
     uint32 x = (i_cell.GridX()*MAX_NUMBER_OF_CELLS) + i_cell.CellX();
     uint32 y = (i_cell.GridY()*MAX_NUMBER_OF_CELLS) + i_cell.CellY();
     CellPair cell_pair(x,y);
     uint32 cell_id = (cell_pair.y_coord*TOTAL_NUMBER_OF_CELLS_PER_MAP) + cell_pair.x_coord;
 
-    CellObjectGuids const& cell_guids = objmgr.GetCellObjectGuids(i_map->GetId(), cell_id);
-    LoadHelper(cell_guids.corpses, cell_pair, m, i_corpses, i_map);
+    // Load bones to grid store
+    QueryResult *result = sDatabase.PQuery(
+        "SELECT `corpse`.`position_x`,`corpse`.`position_y`,`position_z`,`orientation`,`corpse`.`map`,`data`,`bones_flag`,`instance`,`corpse`.`guid` "
+        "FROM `corpse` LEFT JOIN `corpse_grid` ON `corpse`.`guid` = `corpse_grid`.`guid` "
+        "WHERE `grid` = '%u' AND `cell` = '%u' AND `corpse_grid`.`map` = '%u' AND `bones_flag` = 1 AND `instance` = '%u'", i_grid.GetGridId(), cell_id, i_map->GetId(), i_map->GetInstanceId());
+    LoadHelper(result, cell_pair, m, i_corpses, i_map);
 }
 
 void
@@ -246,36 +244,18 @@ ObjectGridUnloader::Visit(std::map<OBJECT_HANDLE, T *> &m)
     m.clear();
 }
 
-template<class T>
-void
-ObjectGridUnloader::Visit(std::map<OBJECT_HANDLE, CountedPtr<T> > &m)
-{
-    if( m.size() == 0 )
-        return;
-
-    for(typename std::map<OBJECT_HANDLE, CountedPtr<T> >::iterator iter=m.begin(); iter != m.end(); ++iter)
-    {
-        // if option set then object already saved at this moment
-        if(!sWorld.getConfig(CONFIG_SAVE_RESPAWN_TIME_IMMEDIATLY))
-            iter->second->SaveRespawnTime();
-        //delete iter->second;
-    }
-
-    m.clear();
-}
-
 template<>
 void
-ObjectGridUnloader::Visit(CreatureMapType &m)
+ObjectGridUnloader::Visit(std::map<OBJECT_HANDLE, Creature*> &m)
 {
     if( m.size() == 0 )
         return;
 
     // remove all cross-reference before deleting
-    for(CreatureMapType::iterator iter=m.begin(); iter != m.end(); ++iter)
+    for(std::map<OBJECT_HANDLE, Creature* >::iterator iter=m.begin(); iter != m.end(); ++iter)
         iter->second->CleanupCrossRefsBeforeDelete();
 
-    for(CreatureMapType::iterator iter=m.begin(); iter != m.end(); ++iter)
+    for(std::map<OBJECT_HANDLE, Creature* >::iterator iter=m.begin(); iter != m.end(); ++iter)
     {
         // if option set then object already saved at this moment
         if(!sWorld.getConfig(CONFIG_SAVE_RESPAWN_TIME_IMMEDIATLY))
@@ -294,20 +274,19 @@ ObjectGridStoper::Stop(GridType &grid)
 }
 
 void
-ObjectGridStoper::Visit(CreatureMapType &m)
+ObjectGridStoper::Visit(std::map<OBJECT_HANDLE, Creature*> &m)
 {
     if( m.size() == 0 )
         return;
 
-    // stop any fights at grid de-activation and remove dynobjects created at cast by creatures
-    for(CreatureMapType::iterator iter=m.begin(); iter != m.end(); ++iter)
+    // stop any fights at grid de-activation
+    for(std::map<OBJECT_HANDLE, Creature* >::iterator iter=m.begin(); iter != m.end(); ++iter)
     {
         iter->second->CombatStop(true);
         iter->second->DeleteThreatList();
-        iter->second->RemoveAllDynObjects();
     }
 }
 
-template void ObjectGridUnloader::Visit(GameObjectMapType &m);
-template void ObjectGridUnloader::Visit(DynamicObjectMapType &m);
-template void ObjectGridUnloader::Visit(std::map<OBJECT_HANDLE, CountedPtr<Corpse> > &m);
+template void ObjectGridUnloader::Visit(std::map<OBJECT_HANDLE, GameObject *> &m);
+template void ObjectGridUnloader::Visit(std::map<OBJECT_HANDLE, DynamicObject *> &m);
+template void ObjectGridUnloader::Visit(std::map<OBJECT_HANDLE, Corpse *> &m);

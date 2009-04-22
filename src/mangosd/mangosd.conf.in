@@ -1,5 +1,5 @@
 # MaNGOS Configuration file
-ConfVersion=2007062001
+ConfVersion=2006082301
 
 # RealmID must match the realmlist
 RealmID = 1
@@ -7,20 +7,10 @@ RealmID = 1
 # 0 NORMAL 1 PVP 4 NORMAL 6 RP 8 RPPVP
 GameType = 1
 
-# Allow server use expansion content
-#          0 (not check expansion maps existence, not allow wisit its, not allow create new race characters, ignore account expansion setting)
-# Default: 1 (check expansion maps existence, and if client support expansion and account have expansion setting then allow visit expansion maps, allow create new races character)
-Expansion = 1
-
 # Data directory setting.
 # Important: DataDir needs to be quoted, as it is a string which may
 # contain space characters.
 DataDir = "@MANGOSD_DATA@"
-
-# Logs directory setting.
-# Important: Logs dir must exists, or all logs be disable
-# Default: "" - no log directory prefix, if used log names isn't absolute path then logs will be stored in current directory for run program.
-LogsDir = ""
 
 # Database connection settings for the world server.
 # Default: hostname;port;username;password;database
@@ -34,26 +24,6 @@ WorldDatabaseInfo = "127.0.0.1;3306;mangos;mangos;mangos"
 # Settings for maximum database-ping interval (minutes between pings)
 MaxPingTime = 30
 
-# DBC Language Settings
-# 0 = English
-# 1 = Korean
-# 2 = French
-# 3 = German
-# 4 = Chinese
-# 5 = Taiwanese
-# 6 = Spanish
-# 7 = Russian
-# 8 = Auto Detect (Default)
-DBC.Locale = 8
-
-# Enable logging of GM commands - all SQL code will be written to a log file
-# All commands are written to a file: YYYY-MM-DD_logSQL.sql
-# If a new day starts (00:00:00) then a new file is created - the old
-# file will not be deleted.
-# 0 - Do not log
-# 1 - Write SQL code to logfile
-LogSQL = 1
-
 # Server console level of logging
 # 0 = Minimum; 1 = Basic&Error; 2 = Detail; 3 = Full/Debug
 # Default: 0
@@ -65,21 +35,21 @@ LogLevel = 3
 # Default: ""
 LogFile = "Server.log"
 
-# Logfile with timestamp of server start in name
-# Default: 0 - no timestamp in name
-#          1 - add timestamp in name in form Logname_YYYY-MM-DD_HH-MM-SS.Ext for Logname.Ext
-LogTimestamp = 0
-
 # Server file level of logging
 # 0 = Minimum; 1 = Error; 2 = Detail; 3 = Full/Debug
 # Default: 0
 LogFileLevel = 0
 
+# Packet logging for the worldserver
+# Default: 0 (false)
+#          1 (true)
+LogWorld = 1
+
 # Log filters
 # 0 (default) - include in log if log level permit, 1 - not include with any log level
 LogFilter_TransportMoves = 0
 LogFilter_CreatureMoves = 0
-LogFilter_VisibilityChanges = 0
+
 
 # Color for messages (format "normal_color details_color debug_color error_color)
 # Colors: 0 - BLACK, 1 - RED, 2 - GREEN,  3 - BROWN, 4 - BLUE, 5 - MAGENTA, 6 -  CYAN, 7 - GREY, 
@@ -88,10 +58,6 @@ LogFilter_VisibilityChanges = 0
 #          "13 7 11 9" - for example :)
 LogColors = ""
 
-# Packet logging file for the worldserver.
-# Default: ""
-WorldLogFile = "world.log"
-
 # Log file of DB errors detected at server run.
 # Default: ""
 DBErrorLogFile = "DBErrors.log"
@@ -99,10 +65,6 @@ DBErrorLogFile = "DBErrors.log"
 # Log file of gm commands
 # Default: "" (Disable)
 GmLogFile = ""
-
-# Log file of RA commands, "" for disable
-# Default: "Ra.log"
-RaLogFile = ""
 
 # Used processors mask for multi-processors system (Used only at Windows)
 # Default: 0 (selected by OS)
@@ -119,6 +81,7 @@ ProcessPriority = 1
 #          9 (best compression) 
 Compression = 1
 
+
 # Maximum number of players in the world. Excluding GM's
 # Default: 100
 PlayerLimit = 100
@@ -126,7 +89,7 @@ PlayerLimit = 100
 # Max level that can reached by player for expirience (in range from 1 to 255).
 # Change not recommended
 # Default: 60
-MaxPlayerLevel = 70
+MaxPlayerLevel = 60
 
 # Activate weather system
 # Default: 1 (true)
@@ -170,29 +133,15 @@ AllowTwoSide.Interaction.Guild = 0
 AllowTwoSide.Interaction.Trade = 0
 
 # Allow or not show player from both team in who list.
-# Default: 0 (Not allowed)
-#          1 (Allowed)
+# Defaullt: 0 (Not allowed)
+#           1 (Allowed)
 AllowTwoSide.WhoList = 0
-
-
-# Chat anti-flood protection, haste message count to activate protection
-#          0 (disible anti-flood protection)
-# Default: 10
-ChatFlood.MessageCount = 10
-
-# Chat anti-flood protection, minimum message delay to count message
-# Default: 1 (in secs)
-ChatFlood.MessageDelay = 1
-
-# Chat anti-flood protection, mute time at activation flood protection (not saved)
-# Default: 10 (in secs)
-ChatFlood.MuteTime = 10
-
 
 # Is GM accept whispers from player by default.
 # Default: 0 (false)
 #          1 (true) 
 GM.WhisperingTo = 0
+
 
 # Is GM showed in GM list (if visible) in non-GM state (.gmoff)
 # Default: 0 (false)
@@ -219,50 +168,17 @@ GM.LogTrade = 1
 # Default: 0 (standard setting: only members from same group can 100% auto detect invisible player)
 #          1 (raid members 100% auto detect invisible player from same raid)
 #          2 (players from same team can 100% auto detect invisible player)
-Visibility.GroupMode = 0
+GroupVisibility = 0
 
-
-# Visibility distance for different in game object 
-# Max limited by active player zone: ~ 166
-# Min limit dependent from objects
-# Default: 66 (cell size)
-#
-# Min limit is max aggro radius (45) * Rate.Creature.Aggro
-Visibility.Distance.Creature      = 66
-Visibility.Distance.Player        = 66
-#
-# gameobject, dynobject, bodies, corpses, bones
-# Min limit is iteraction distance (5)
-Visibility.Distance.Object        = 66
-#
-# visible distance for player in flight
-# Min limit is 0 (not show any objects)
-Visibility.Distance.InFlight      = 66
-
-# Visibility grey distance for creatures/players (fast changing obects)
-#    addition to appropriate object type Visibility.Distance.* use in case visibility removing to object (except corpse around distences)
-#    If ‚ is distance and G is grey distance then object make visible if distance to it <= D but make non visible if distance > D+G
-# Default: 1 yard
-Visibility.Distance.Grey.Unit   = 1
-#
-# Visibility grey distance for dynobjects/gameobjects/corpses/creature bodies
-# 
-# Default: 10 yards
-Visibility.Distance.Grey.Object = 10
-
-# Mail delivery delay time in case sending item
-# Default: 3600 sec (1 hour)
-MailDeliveryDelay = 3600
-
-# Message of the Day. Displayed at worldlogin for every user ('@' for a newline).
+# Message of the Day. Displayed at worldlogin for every user.
 Motd = "Welcome to the Massive Network Game Object Server."
 
-# Health and power regeneration and rage income from damage.
+# Health and power regeneration.
+# Power1 - Mana; Power2 - Rage; Power3 - Focus (?).
 Rate.Health = 1;
-Rate.Mana = 1;
-Rate.Rage.Income = 1;
-Rate.Rage.Loss = 1;
-Rate.Focus = 1;
+Rate.Power1 = 1;
+Rate.Power2 = 1;
+Rate.Power3 = 1;
 
 # Drop rates
 # Default: 1
@@ -291,6 +207,7 @@ Rate.Creature.Elite.RAREELITE.HP = 1
 Rate.Creature.Elite.WORLDBOSS.HP = 1
 Rate.Creature.Elite.RARE.HP = 1
 
+
 # Resting points grow rates (1 - normal, 2 - double rate, 0.5 - half rate, etc) from standard values
 Rate.Rest.InGame = 1
 Rate.Rest.Offline.InTavernOrCity = 1
@@ -298,19 +215,6 @@ Rate.Rest.Offline.InWilderness = 1
 
 # Damage after fall rate. (1 - standard, 2 - double damage, 0.5 - half damage, etc)
 Rate.Damage.Fall = 1
-
-# Auction rates (auction time, deposit get at auction start, auction cut from price at auction end)
-Rate.Auction.Time = 1
-Rate.Auction.Deposit = 1
-Rate.Auction.Cut = 1
-
-# Mining Rates (Mining.Amount changes minimum/maximum usetimes of a deposit, Mining.Next changes chance to have next use of a deposit)
-Rate.Mining.Amount = 1
-Rate.Mining.Next   = 1
-
-# Talent Point rates
-# Default: 1
-Rate.Talent = 1
 
 # Save respawn time for creatures at death, for gameobjects at use/open
 #          0 (save creature/gameobject respawn time at grid unload)
@@ -330,21 +234,11 @@ SkillChance.Grey   = 0
 #          1.5 - 150%
 Rate.Creature.Aggro = 1
 
-# Enable console
-#          0 - off
-# Default: 1 - on
-Console.Enable = 1
-
-# Enable remote console
-# Default: 0 - off
-#          1 - on
-Ra.Enable = 0
-
-# Default remote console ip address, use 0.0.0.0 for every address
-Ra.IP = 0.0.0.0
-
 # Default remote console port
 Ra.Port = 3443
+
+# Log remote console connections
+Ra.Log = 1
 
 # Minimum level that's required to login,3 by default
 Ra.MinLevel = 3
@@ -360,6 +254,7 @@ MaxOverspeedPings = 2
 #          0 (not unload grids)
 # Default: 1 (unload grids)
 GridUnload = 1;
+
 
 # All times are in milliseconds.
 
@@ -380,6 +275,7 @@ PlayerSaveInterval = 900000
 
 # Default WorldServerPort
 WorldServerPort = 8085
+
 
 # Beep at mangosd start finished (mostly work only at Unix/Linux systems)
 # Default: 1 

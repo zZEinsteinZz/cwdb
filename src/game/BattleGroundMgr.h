@@ -32,17 +32,12 @@ class BattleGroundMgr
         /* Construction */
         BattleGroundMgr();
         ~BattleGroundMgr();
-        void Update(time_t diff);
 
         /* Packet Building */
-        void BuildPlayerJoinedBattleGroundPacket(WorldPacket *data, Player *plr);
-        void BuildPlayerLeftBattleGroundPacket(WorldPacket *data, Player *plr);
-        void BuildBattleGroundListPacket(WorldPacket *data, uint64 guid, Player *plr, uint32 bgId);
-        void BuildGroupJoinedBattlegroundPacket(WorldPacket *data, uint32 bgid);
-        void BuildUpdateWorldStatePacket(WorldPacket *data, uint32 field, uint32 value);
-        void BuildPvpLogDataPacket(WorldPacket *data, BattleGround *bg, uint8 winner);
-        void BuildBattleGroundStatusPacket(WorldPacket *data, BattleGround *bg, uint32 team, uint8 StatusID, uint32 Time1, uint32 Time2);
-        void BuildPlaySoundPacket(WorldPacket *data, uint32 soundid);
+        void BuildPlayerLeftBattleGroundPacket(WorldPacket* data, Player* plr);
+        void BuildPlayerJoinedBattleGroundPacket(WorldPacket* data, Player* plr);
+
+        void BuildBattleGroundListPacket(WorldPacket* data, uint64 guid, Player* plr);
 
         /* Battlegrounds */
         BattleGroundSet::iterator GetBattleGroundsBegin() { return m_BattleGrounds.begin(); };
@@ -56,14 +51,15 @@ class BattleGroundMgr
             else
                 return NULL;
         };
-
-        uint32 CreateBattleGround(uint32 bg_ID, uint32 MaxPlayersPerTeam, uint32 LevelMin, uint32 LevelMax, char* BattleGroundName, uint32 MapID, float Team1StartLocX, float Team1StartLocY, float Team1StartLocZ, float Team1StartLocO, float Team2StartLocX, float Team2StartLocY, float Team2StartLocZ, float Team2StartLocO);
+        uint32 CreateBattleGround(uint32 MaxPlayersPerTeam, uint32 LevelMin, uint32 LevelMax, std::string BattleGroundName, uint32 MapID, float Team1StartLocX, float Team1StartLocY, float Team1StartLocZ, float Team1StartLocO, float Team2StartLocX, float Team2StartLocY, float Team2StartLocZ, float Team2StartLocO);
 
         inline void AddBattleGround(uint32 ID, BattleGround* BG) { m_BattleGrounds[ID] = BG; };
 
         void CreateInitialBattleGrounds();
 
         void SendToBattleGround(Player *pl, uint32 bgId);
+
+        void SendBattleGroundStatusPacket(Player *pl, uint32 MapID, uint8 InstanceID, uint8 StatusID, uint32 Time = 0x00FFFF00);
 
     private:
 

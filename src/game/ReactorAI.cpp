@@ -49,7 +49,7 @@ ReactorAI::AttackStart(Unit *p)
     DEBUG_LOG("Start to attack");
     if(i_creature.Attack(p))
     {
-        DEBUG_LOG("Tag unit GUID: %u (TypeId: %u) as a victim", p->GetGUIDLow(), p->GetTypeId());
+        DEBUG_LOG("Tag unit LowGUID(%u) HighGUID(%u) as a victim", p->GetGUIDLow(), p->GetGUIDHigh());
         i_creature.AddThreat(p, 0.0f);
         i_victimGuid = p->GetGUID();
         i_creature->Mutate(new TargetedMovementGenerator(*p));
@@ -60,6 +60,17 @@ ReactorAI::AttackStart(Unit *p)
 
 void
 ReactorAI::stopAttack()
+{
+
+}
+
+void
+ReactorAI::HealBy(Unit *healer, uint32 amount_healed)
+{
+}
+
+void
+ReactorAI::DamageInflict(Unit *healer, uint32 amount_healed)
 {
 }
 
@@ -88,7 +99,7 @@ ReactorAI::UpdateAI(const uint32 time_diff)
             return;
         }
 
-        if( i_creature.IsWithinDistInMap(i_creature.getVictim(), ATTACK_DISTANCE))
+        if( i_creature.IsWithinDistInMap(i_creature.getVictim(), ATTACK_DIST))
         {
             if( i_creature.isAttackReady() )
             {

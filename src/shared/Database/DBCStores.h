@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright (C) 2005,2006,2007 MaNGOS <http://www.mangosproject.org/>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -33,10 +33,7 @@ enum SpellSpecific
     SPELL_STING = 4,
     SPELL_CURSE = 5,
     SPELL_ASPECT = 6,
-    SPELL_TRACKER = 7,
-    SPELL_WARLOCK_ARMOR = 8,
-    SPELL_MAGE_ARMOR = 9,
-    SPELL_ELEMENTAL_SHIELD = 10
+    SPELL_TRACKER = 7
 };
 
 enum SpellFamilyNames
@@ -60,9 +57,8 @@ float GetMinRange(SpellRangeEntry const *range);
 float GetMaxRange(SpellRangeEntry const *range);
 int32 GetDuration(SpellEntry const *spellInfo);
 int32 GetMaxDuration(SpellEntry const *spellInfo);
-char* GetPetName(uint32 petfamily, uint32 dbclang);
+char* GetPetName(uint32 petfamily);
 bool IsNoStackAuraDueToAura(uint32 spellId_1, uint32 effIndex_1, uint32 spellId_2, uint32 effIndex_2);
-bool IsSealSpell(uint32 spellId);
 int32 CompareAuraRanks(uint32 spellId_1, uint32 effIndex_1, uint32 spellId_2, uint32 effIndex_2);
 SpellSpecific GetSpellSpecific(uint32 spellId);
 bool IsSpellSingleEffectPerCaster(uint32 spellId);
@@ -75,19 +71,19 @@ AreaTableEntry const* GetAreaEntryByAreaID(uint32 area_id);
 AreaTableEntry const* GetAreaEntryByAreaFlag(uint32 area_flag);
 uint32 GetAreaFlagByMapId(uint32 mapid);
 bool CanUsedWhileStealthed(uint32 spellId);
-ChatChannelsEntry const* GetChannelEntryFor(uint32 channel_id);
 
 template<class T>
 class DBCStorage
 {
     public:
-        DBCStorage(const char *f){indexTable = NULL;fmt=f;fieldCount = 0; nCount =0; data = NULL; }
-        ~DBCStorage() { Clear(); }
+        DBCStorage(const char *f){data = NULL;fmt=f;fieldCount = 0; nCount =0; }
+        ~DBCStorage(){if(data) delete [] data;};
 
         inline
             T const* LookupEntry(uint32 id) const
         {
-            return (id>=nCount)?NULL:indexTable[id];
+            return (id>nCount)?NULL:data[id];
+
         }
         inline
             unsigned int GetNumRows() const
@@ -100,30 +96,24 @@ class DBCStorage
 
             dbc = new DBCFile;
             // Check if load was sucessful, only then continue
-            bool res = dbc->Load(fn, fmt);
+            bool res = dbc->Load(fn);
             if (res)
             {
                 fieldCount = dbc->GetCols();
-                indexTable=(T **) dbc->AutoProduceData(fmt,&nCount,data);
+                data=(T **) dbc->AutoProduceData(fmt,&nCount);
             }
             delete dbc;
 
             // error in dbc file at loading
-            if(!indexTable)
+            if(!data)
                 res = false;
 
             return res;
         }
 
-        void Clear()
-        {
-            if (!indexTable) return;
-            delete[] ((char*)indexTable); indexTable = NULL;
-            delete[] data;
-        }
+        void Clear() {  delete[] ((char*)data); data = NULL; }
 
-        T** indexTable;
-        char * data;
+        T** data;
         uint32 nCount;
         uint32 fieldCount;
         const char * fmt;
@@ -134,22 +124,15 @@ class DBCStorage
 
 //extern DBCStorage <AreaTableEntry>            sAreaStore; -- accessed using 2 functions
 extern DBCStorage <BankBagSlotPricesEntry>    sBankBagSlotPricesStore;
-extern DBCStorage <BattlemasterListEntry>     sBattlemasterListStore;
-//extern DBCStorage <ChatChannelsEntry>         sChatChannelsStore; -- accessed using function, no usable index
 extern DBCStorage <ChrClassesEntry>           sChrClassesStore;
 extern DBCStorage <ChrRacesEntry>             sChrRacesStore;
 extern DBCStorage <CreatureFamilyEntry>       sCreatureFamilyStore;
-extern DBCStorage <DurabilityCostsEntry>      sDurabilityCostsStore; 
-extern DBCStorage <DurabilityQualityEntry>    sDurabilityQualityStore;
 extern DBCStorage <SpellCastTimesEntry>       sCastTimesStore;
 extern DBCStorage <EmotesTextEntry>           sEmotesTextStore;
 extern DBCStorage <FactionEntry>              sFactionStore;
 extern DBCStorage <FactionTemplateEntry>      sFactionTemplateStore;
-extern DBCStorage <GemPropertiesEntry>        sGemPropertiesStore;
-//extern DBCStorage <ItemDisplayInfoEntry>      sItemDisplayInfoStore; -- not used currently
-extern DBCStorage <ItemExtendedCostEntry>     sItemExtendedCostStore;
+extern DBCStorage <ItemDisplayInfoEntry>      sItemDisplayInfoStore;
 extern DBCStorage <ItemRandomPropertiesEntry> sItemRandomPropertiesStore;
-extern DBCStorage <ItemRandomSuffixEntry>     sItemRandomSuffixStore;
 extern DBCStorage <ItemSetEntry>              sItemSetStore;
 extern DBCStorage <LockEntry>                 sLockStore;
 extern DBCStorage <MapEntry>                  sMapStore;
@@ -158,7 +141,6 @@ extern DBCStorage <SkillLineAbilityEntry>     sSkillLineAbilityStore;
 extern DBCStorage <SpellDurationEntry>        sSpellDurationStore;
 //extern DBCStorage <SpellFocusObjectEntry>     sSpellFocusObjectStore;
 extern DBCStorage <SpellItemEnchantmentEntry> sSpellItemEnchantmentStore;
-extern DBCStorage <SpellItemEnchantmentConditionEntry> sSpellItemEnchantmentConditionStore;
 extern SpellCategoryStore                     sSpellCategoryStore;
 extern DBCStorage <SpellRadiusEntry>          sSpellRadiusStore;
 extern DBCStorage <SpellRangeEntry>           sSpellRangeStore;

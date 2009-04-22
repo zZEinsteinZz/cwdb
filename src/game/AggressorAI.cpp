@@ -42,9 +42,9 @@ AggressorAI::AggressorAI(Creature &c) : i_creature(c), i_victimGuid(0), i_state(
 void
 AggressorAI::MoveInLineOfSight(Unit *u)
 {
-    if( !i_creature.getVictim() && !i_creature.hasUnitState(UNIT_STAT_STUNDED) && u->isTargetableForAttack() &&
+    if( !i_creature.getVictim() && u->isTargetableForAttack() &&
         ( i_creature.IsHostileTo( u ) /*|| u->getVictim() && i_creature.IsFriendlyTo( u->getVictim() )*/ ) &&
-        u->isInAccessablePlaceFor(&i_creature) )
+        u->isInAccessablePlaceFor(&i_creature))
     {
         float attackRadius = i_creature.GetAttackDistance(u);
         if(i_creature.IsWithinDistInMap(u, attackRadius) && i_creature.GetDistanceZ(u) <= CREATURE_Z_ATTACK_RANGE)
@@ -54,6 +54,16 @@ AggressorAI::MoveInLineOfSight(Unit *u)
                 u->RemoveSpellsCausingAura(SPELL_AURA_MOD_STEALTH);
         }
     }
+}
+
+void
+AggressorAI::HealBy(Unit *healer, uint32 amount_healed)
+{
+}
+
+void
+AggressorAI::DamageInflict(Unit *healer, uint32 amount_healed)
+{
 }
 
 bool
@@ -156,7 +166,7 @@ AggressorAI::UpdateAI(const uint32 diff)
 
         assert((i_victimGuid != 0) == (i_creature.getVictim() != NULL) && "i_victimGuid and i_creature.getVictim() not synchronized.");
 
-        if( i_creature.IsWithinDistInMap(i_creature.getVictim(), ATTACK_DISTANCE))
+        if( i_creature.IsWithinDistInMap(i_creature.getVictim(), ATTACK_DIST))
         {
             if( i_creature.isAttackReady() )
             {
@@ -171,7 +181,7 @@ bool
 AggressorAI::IsVisible(Unit *pl) const
 {
     return i_creature.GetDistanceSq(pl) < sWorld.getConfig(CONFIG_SIGHT_MONSTER)
-        && pl->isVisibleForOrDetect(&i_creature,true);
+        && pl->isVisibleFor(&i_creature,true);
 }
 
 void

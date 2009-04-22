@@ -27,9 +27,8 @@ class Config;
 // bitmask
 enum LogFilters
 {
-    LOG_FILTER_TRANSPORT_MOVES    = 1,
-    LOG_FILTER_CREATURE_MOVES     = 2,
-    LOG_FILTER_VISIBILITY_CHANGES = 4
+    LOG_FILTER_TRANSPORT_MOVES = 1,
+    LOG_FILTER_CREATURE_MOVES  = 2
 };
 
 enum Color
@@ -56,53 +55,43 @@ const int Color_count = int(WHITE)+1;
 class Log : public MaNGOS::Singleton<Log, MaNGOS::ClassLevelLockable<Log, ZThread::FastMutex> >
 {
     friend class MaNGOS::OperatorNew<Log>;
-    Log() : logfile(NULL), gmLogfile(NULL), dberLogfile(NULL), raLogfile(NULL), m_colored(false) { Initialize(); }
+    Log() : logfile(NULL), gmlogfile(NULL), dberlogfile(NULL), m_colored(false) { Initialize(); }
     ~Log()
     {
         if( logfile != NULL )
             fclose(logfile);
         logfile = NULL;
 
-        if( gmLogfile != NULL )
-            fclose(gmLogfile);
-        gmLogfile = NULL;
+        if( gmlogfile != NULL )
+            fclose(gmlogfile);
+        gmlogfile = NULL;
 
-        if( dberLogfile != NULL )
-            fclose(dberLogfile);
-        dberLogfile = NULL;
-        
-        if (raLogfile != NULL)
-            fclose(raLogfile);
-        raLogfile = NULL;
+        if( dberlogfile != NULL )
+            fclose(dberlogfile);
+        dberlogfile = NULL;
     }
     public:
         void Initialize();
         void InitColors(std::string init_str);
         void outTitle( const char * str);
         void outCommand( const char * str, ...);
-        void outString( const char * str, ... );            // any log level
-        void outError( const char * err, ... );             // any log level
-        void outBasic( const char * str, ... );             // log level >= 1
-        void outDetail( const char * str, ... );            // log level >= 2
-        void outDebugInLine( const char * str, ... );       // log level >= 3
-        void outDebug( const char * str, ... );             // log level >= 3
-        void outMenu( const char * str, ... );              // any log level
-        void outErrorDb( const char * str, ... );           // any log level
-        void outRALog( const char * str, ... );             // any log level
+        void outString( const char * str, ... );
+        void outError( const char * err, ... );
+        void outBasic( const char * str, ... );
+        void outDetail( const char * str, ... );
+        void outDebug( const char * str, ... );
+        void outMenu( const char * str, ... );
+        void outErrorDb( const char * str, ... );
         void SetLogLevel(char * Level);
         void SetLogFileLevel(char * Level);
         void SetColor(bool stdout_stream, Color color);
         void ResetColor(bool stdout_stream);
         void outTimestamp(FILE* file);
-        std::string GetTimestampStr() const;
         uint32 getLogFilter() const { return m_logFilter; }
-        bool IsOutDebug() const { return m_logLevel > 2 || m_logFileLevel > 2 && logfile; }
     private:
-        FILE* raLogfile;
         FILE* logfile;
-        FILE* gmLogfile;
-        FILE* dberLogfile;
-
+        FILE* gmlogfile;
+        FILE* dberlogfile;
         uint32 m_logLevel;
         uint32 m_logFileLevel;
         bool m_colored;

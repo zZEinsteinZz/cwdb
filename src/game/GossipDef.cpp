@@ -27,7 +27,7 @@
 
 GossipMenu::GossipMenu()
 {
-    m_gItems.reserve(16);                                   // can be set for max from most often sizes to speedup push_back and less memory use
+    m_gItemsCount = 0;
 }
 
 GossipMenu::~GossipMenu()
@@ -37,17 +37,19 @@ GossipMenu::~GossipMenu()
 
 void GossipMenu::AddMenuItem(uint8 Icon, char const * Message, uint32 dtSender, uint32 dtAction, bool Coded)
 {
-    ASSERT( m_gItems.size() <= GOSSIP_MAX_MENU_ITEMS  );
+    //    uint64 gtData;
 
-    GossipMenuItem gItem;
+    char* Text = new char[strlen(Message) + 1];
+    strcpy( Text, Message );
 
-    gItem.m_gIcon     = Icon;
-    gItem.m_gMessage  = Message ? Message : "";
-    gItem.m_gCoded    = Coded;
-    gItem.m_gSender   = dtSender;
-    gItem.m_gAction   = dtAction;
+    m_gItemsCount++;
+    ASSERT( m_gItemsCount < GOSSIP_MAX_MENU_ITEMS  );
 
-    m_gItems.push_back(gItem);
+    m_gItems[m_gItemsCount - 1].m_gIcon     = Icon;
+    m_gItems[m_gItemsCount - 1].m_gMessage  = Text;
+    m_gItems[m_gItemsCount - 1].m_gCoded    = Coded;
+    m_gItems[m_gItemsCount - 1].m_gSender   = dtSender;
+    m_gItems[m_gItemsCount - 1].m_gAction   = dtAction;
 }
 
 void GossipMenu::AddMenuItem(uint8 Icon, char const * Message, bool Coded)
@@ -57,21 +59,24 @@ void GossipMenu::AddMenuItem(uint8 Icon, char const * Message, bool Coded)
 
 uint32 GossipMenu::MenuItemSender( unsigned int ItemId )
 {
-    if ( ItemId >= m_gItems.size() ) return 0;
+    if ( ItemId >= m_gItemsCount ) return 0;
 
     return m_gItems[ ItemId ].m_gSender;
 }
 
 uint32 GossipMenu::MenuItemAction( unsigned int ItemId )
 {
-    if ( ItemId >= m_gItems.size() ) return 0;
+    if ( ItemId >= m_gItemsCount ) return 0;
 
     return m_gItems[ ItemId ].m_gAction;
 }
 
 void GossipMenu::ClearMenu()
 {
-    m_gItems.clear();
+    for (unsigned int i=0; i<m_gItemsCount; i++)
+        delete[] m_gItems[i].m_gMessage;
+
+    m_gItemsCount = 0;
 }
 
 PlayerMenu::PlayerMenu( WorldSession *Session )
@@ -114,16 +119,8 @@ void PlayerMenu::SendGossipMenu( uint32 TitleTextId, uint64 npcGUID )
     {
         data << uint32( iI );
         data << uint8( pGossipMenu->GetItem(iI).m_gIcon );
-        // icons:
-        // 0 unlearn talents/misc
-        // 1 trader
-        // 2 taxi
-        // 3 trainer
-        // 9 BG/arena
-        data << uint8( pGossipMenu->GetItem(iI).m_gCoded );
-        data << uint32(0);                                  // req money to open menu, 2.0.3
+        data << uint8( pGossipMenu->GetItem(iI).m_gCoded);
         data << pGossipMenu->GetItem(iI).m_gMessage;
-        data << uint8(0);                                   // unknown, 2.0.3
     }
 
     data << uint32( pQuestMenu->MenuItemCount() );
@@ -224,7 +221,7 @@ void PlayerMenu::SendTalking( char const * title, char const * text )
 
 QuestMenu::QuestMenu()
 {
-    m_qItems.reserve(16);                                   // can be set for max from most often sizes to speedup push_back and less memory use
+    m_qItemsCount = 0;
 }
 
 QuestMenu::~QuestMenu()
@@ -237,21 +234,18 @@ void QuestMenu::AddMenuItem( uint32 QuestId, uint8 Icon)
     Quest * qinfo = objmgr.QuestTemplates[QuestId];
     if (!qinfo) return;
 
-    ASSERT( m_qItems.size() <= GOSSIP_MAX_MENU_ITEMS  );
+    m_qItemsCount++;
+    ASSERT( m_qItemsCount < GOSSIP_MAX_MENU_ITEMS  );
 
-    QuestMenuItem qItem;
-
-    qItem.m_qId        = QuestId;
-    qItem.m_qIcon      = Icon;
-
-    m_qItems.push_back(qItem);
+    m_qItems[m_qItemsCount - 1].m_qId        = QuestId;
+    m_qItems[m_qItemsCount - 1].m_qIcon      = Icon;
 }
 
 bool QuestMenu::HasItem( uint32 questid )
 {
-    for (QuestMenuItemList::iterator i = m_qItems.begin(); i != m_qItems.end(); i++)
+    for(int i=0;i<m_qItemsCount;i++)
     {
-        if(i->m_qId==questid)
+        if(m_qItems[i].m_qId==questid)
         {
             return true;
         }
@@ -261,7 +255,7 @@ bool QuestMenu::HasItem( uint32 questid )
 
 void QuestMenu::ClearMenu()
 {
-    m_qItems.clear();
+    m_qItemsCount = 0;
 }
 
 void PlayerMenu::SendQuestGiverQuestList( QEmote eEmote, std::string Title, uint64 npcGUID )
@@ -269,8 +263,8 @@ void PlayerMenu::SendQuestGiverQuestList( QEmote eEmote, std::string Title, uint
     WorldPacket data( SMSG_QUESTGIVER_QUEST_LIST, 100 );    // guess size
     data << uint64(npcGUID);
     data << Title;
-    data << uint32(eEmote._Delay );                         // player emote
-    data << uint32(eEmote._Emote );                         // NPC emote
+    data << uint32(eEmote._Delay );                         //zyg: player emote
+    data << uint32(eEmote._Emote );                         //zyg: NPC emote
     data << uint8 ( pQuestMenu->MenuItemCount() );
 
     for ( uint16 iI = 0; iI < pQuestMenu->MenuItemCount(); iI++ )
@@ -302,16 +296,12 @@ void PlayerMenu::SendQuestGiverQuestDetails( Quest *pQuest, uint64 npcGUID, bool
 
     data << npcGUID;
     data << pQuest->GetQuestId() << pQuest->GetTitle() << pQuest->GetDetails();
-    data << pQuest->GetObjectives();
-    data << (uint32)ActivateAccept;
-    data << pQuest->GetSuggestedPlayers();
-    
+    data << pQuest->GetObjectives() << uint32( ActivateAccept );
     ItemPrototype const* IProto;
 
     data << pQuest->GetRewChoiceItemsCount();
     for (uint32 i=0; i < QUEST_REWARD_CHOICES_COUNT; i++)
     {
-        if ( !pQuest->RewChoiceItemId[i] ) continue;
         data << uint32(pQuest->RewChoiceItemId[i]);
         data << uint32(pQuest->RewChoiceItemCount[i]);
         IProto = objmgr.GetItemPrototype(pQuest->RewChoiceItemId[i]);
@@ -324,7 +314,6 @@ void PlayerMenu::SendQuestGiverQuestDetails( Quest *pQuest, uint64 npcGUID, bool
     data << pQuest->GetRewItemsCount();
     for (uint32 i=0; i < QUEST_REWARDS_COUNT; i++)
     {
-        if ( !pQuest->RewItemId[i] ) continue;
         data << pQuest->RewItemId[i];
         data << pQuest->RewItemCount[i];
         IProto = objmgr.GetItemPrototype(pQuest->RewItemId[i]);
@@ -336,34 +325,20 @@ void PlayerMenu::SendQuestGiverQuestDetails( Quest *pQuest, uint64 npcGUID, bool
 
     data << uint32(pQuest->GetRewOrReqMoney());
 
-    // check if RewSpell is teaching another spell
-    if(pQuest->GetRewSpell())
+    data << pQuest->GetReqItemsCount();
+    for (uint32 i=0; i <  QUEST_OBJECTIVES_COUNT; i++)
     {
-        SpellEntry const *rewspell = sSpellStore.LookupEntry(pQuest->GetRewSpell());
-        if(rewspell)
-        {
-            if(rewspell->Effect[0] == SPELL_EFFECT_LEARN_SPELL)
-                data << uint32(rewspell->EffectTriggerSpell[0]);
-            else
-                data << uint32(0);
-        }
-        else
-        {
-            sLog.outErrorDb("Quest %u have non-existed RewSpell %u, ignored.",pQuest->GetQuestId(),pQuest->GetRewSpell());
-            data << uint32(0);
-        }
+        data << pQuest->ReqItemId[i];
+        data << pQuest->ReqItemCount[i];
     }
-    else
-        data << uint32(0);                                  // reward spell
 
-    data << uint32(pQuest->GetRewSpell());                  // cast spell
-
-    data << uint32(QUEST_EMOTE_COUNT);
-    for (uint32 i=0; i < QUEST_EMOTE_COUNT; i++)
+    data << pQuest->GetReqCreatureOrGOcount();
+    for (uint32 i=0; i <QUEST_OBJECTIVES_COUNT; i++)
     {
-        data << pQuest->DetailsEmote[i];
-        data << uint32(0);                                  // DetailsEmoteDelay
+        data << uint32(pQuest->ReqCreatureOrGOId[i]);
+        data << pQuest->ReqCreatureOrGOCount[i];
     }
+
     pSession->SendPacket( &data );
 
     //sLog.outDebug("WORLD: Sent SMSG_QUESTGIVER_QUEST_DETAILS NPCGuid=%u, questid=%u",GUID_LOPART(npcGUID),pQuest->GetQuestId());
@@ -374,20 +349,23 @@ void PlayerMenu::SendQuestQueryResponse( Quest *pQuest )
     WorldPacket data( SMSG_QUEST_QUERY_RESPONSE, 100 );     // guess size
 
     data << uint32(pQuest->GetQuestId());
-    data << uint32(pQuest->GetMinLevel());                  // it's not min lvl in 2.0.1+ (0...2 on official)
+    data << uint32(pQuest->GetMinLevel());
     data << uint32(pQuest->GetQuestLevel());
-    data << uint32(pQuest->GetZoneOrSort());
+
+    if(pQuest->GetQuestSort() > 0)
+        data << uint32(pQuest->GetQuestSort() * -1);
+    else
+        data << uint32(pQuest->GetZoneId());
 
     data << uint32(pQuest->GetType());
-    data << uint32(pQuest->GetSuggestedPlayers());
     data << uint32(pQuest->GetRequiredRepFaction());
     data << uint32(pQuest->GetRequiredRepValue());
-    data << uint32(0);                                      // reputation related (faction)
-    data << uint32(0);                                      // reputation related (value)
+    data << uint32(0);
+    data << uint32(0);
 
     data << uint32(pQuest->GetNextQuestInChain());
     data << uint32(pQuest->GetRewOrReqMoney());
-    data << uint32(pQuest->GetRewXpOrMoney());
+    data << uint32(pQuest->GetRewXP());
 
     // check if RewSpell is teaching another spell
     if(pQuest->GetRewSpell())
@@ -398,7 +376,7 @@ void PlayerMenu::SendQuestQueryResponse( Quest *pQuest )
             if(rewspell->Effect[0] == SPELL_EFFECT_LEARN_SPELL)
                 data << uint32(rewspell->EffectTriggerSpell[0]);
             else
-                data << uint32(0);
+                data << uint32(pQuest->GetRewSpell());
         }
         else
         {
@@ -409,7 +387,6 @@ void PlayerMenu::SendQuestQueryResponse( Quest *pQuest )
     else
         data << uint32(0);
 
-    data << uint32(pQuest->GetRewSpell());                  // spellid, The following spell will be casted on you spell_name
     data << uint32(pQuest->GetSrcItemId());
     data << uint32(pQuest->GetSpecialFlags());
 
@@ -438,18 +415,8 @@ void PlayerMenu::SendQuestQueryResponse( Quest *pQuest )
 
     for (iI = 0; iI < QUEST_OBJECTIVES_COUNT; iI++)
     {
-        if (pQuest->ReqCreatureOrGOId[iI] < 0)
-        { 
-            // client expected gameobject template id in form (id|0x80000000)
-            data << uint32((pQuest->ReqCreatureOrGOId[iI]*(-1))|0x80000000);
-        }
-        else
-        {
-            data << uint32(pQuest->ReqCreatureOrGOId[iI]);
-        }
-        data << uint32(pQuest->ReqCreatureOrGOCount[iI]);
-        data << uint32(pQuest->ReqItemId[iI]);
-        data << uint32(pQuest->ReqItemCount[iI]);
+        data << uint32(pQuest->ReqCreatureOrGOId[iI])  << uint32(pQuest->ReqCreatureOrGOCount[iI]);
+        data << uint32(pQuest->ReqItemId[iI]) << uint32(pQuest->ReqItemCount[iI]);
     }
 
     for (iI = 0; iI < QUEST_OBJECTIVES_COUNT; iI++)
@@ -474,21 +441,26 @@ void PlayerMenu::SendQuestGiverOfferReward( uint32 quest_id, uint64 npcGUID, boo
 
     data << uint32( EnbleNext );
 
-    data << uint32(0);                                      // unk
-
-    uint32 EmoteCount = 0;
-    for (uint32 i = 0; i < QUEST_EMOTE_COUNT; i++)
+    /*if ( EmoteCnt > 0 )
     {
-        if(qInfo->OfferRewardEmote[i] <= 0)
-            break;
-        EmoteCount++;
+        data << uint32( EmoteCnt );
+
+        for (unsigned int iI = 0; iI < EmoteCnt; iI++ )
+        {
+            data << Emotes[iI]._Delay;
+            data << Emotes[iI]._Emote;
+        }
+    } else data << uint32( 0x00 ); */
+    // Must be extended later, but for now:
+    if (qInfo->GetOfferRewardEmote() == 0)
+    {
+        data << uint32(0x00);
     }
-
-    data << EmoteCount;                                     // Emote Count
-    for (uint32 i = 0; i < EmoteCount; i++)
+    else
     {
-        data << uint32(0);                                  // Delay Emote
-        data << qInfo->OfferRewardEmote[i];
+        data << uint32(0x1);
+        data << uint32(0x0);
+        data << qInfo->GetOfferRewardEmote();
     }
 
     ItemPrototype const *pItem;
@@ -511,8 +483,7 @@ void PlayerMenu::SendQuestGiverOfferReward( uint32 quest_id, uint64 npcGUID, boo
     for (uint16 i=0; i < qInfo->GetRewItemsCount(); i++)
     {
         pItem = objmgr.GetItemPrototype(qInfo->RewItemId[i]);
-        data << uint32(qInfo->RewItemId[i]);
-        data << uint32(qInfo->RewItemCount[i]);
+        data << uint32(qInfo->RewItemId[i]) << uint32(qInfo->RewItemCount[i]);
 
         if ( pItem )
             data << uint32(pItem->DisplayInfoID);
@@ -521,7 +492,7 @@ void PlayerMenu::SendQuestGiverOfferReward( uint32 quest_id, uint64 npcGUID, boo
     }
 
     data << uint32(qInfo->GetRewOrReqMoney());
-    data << uint32(0x08);
+    data << uint32(0x00);
 
     // check if RewSpell is teaching another spell
     if(qInfo->GetRewSpell())
@@ -543,8 +514,7 @@ void PlayerMenu::SendQuestGiverOfferReward( uint32 quest_id, uint64 npcGUID, boo
     else
         data << uint32(0);
 
-    uint32(0x00);                                           // new 2.0.3
-
+    // more data here--zoneid uint32 + 0x00000000?
     pSession->SendPacket( &data );
     //sLog.outDebug( "WORLD: Sent SMSG_QUESTGIVER_OFFER_REWARD NPCGuid=%u, questid=%u",GUID_LOPART(npcGUID),quest_id );
 }
@@ -568,12 +538,8 @@ void PlayerMenu::SendQuestGiverRequestItems( Quest *pQuest, uint64 npcGUID, bool
 
     data << pQuest->GetRequestItemsText();
 
-    data << uint32(0x00);                                   // unk
-
-    if(Completable)
-        data << pQuest->GetCompleteEmote();
-    else
-        data << pQuest->GetIncompleteEmote();
+    data << uint32(0x00);
+    data << pQuest->GetRequestItemsEmote();
 
     // Close Window after cancel
     if (CloseOnCancel)
@@ -584,13 +550,13 @@ void PlayerMenu::SendQuestGiverRequestItems( Quest *pQuest, uint64 npcGUID, bool
     // Req Money
     data << uint32(pQuest->GetRewOrReqMoney() < 0 ? -pQuest->GetRewOrReqMoney() : 0);
 
-    data << uint32(0x00);                                   // unk
-
     data << uint32( pQuest->GetReqItemsCount() );
+
     ItemPrototype const *pItem;
     for (int i = 0; i < QUEST_OBJECTIVES_COUNT; i++)
     {
         if ( !pQuest->ReqItemId[i] ) continue;
+
         pItem = objmgr.GetItemPrototype(pQuest->ReqItemId[i]);
         data << uint32(pQuest->ReqItemId[i]);
         data << uint32(pQuest->ReqItemCount[i]);
@@ -600,14 +566,12 @@ void PlayerMenu::SendQuestGiverRequestItems( Quest *pQuest, uint64 npcGUID, bool
         else
             data << uint32(0);
     }
-    else
-        uint32(0x0);
 
+    data << uint32(0x02);
     if ( !Completable )
         data << uint32(0x00);
     else
         data << uint32(0x03);
-
     data << uint32(0x04) << uint32(0x08) << uint32(0x10);
 
     pSession->SendPacket( &data );

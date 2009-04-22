@@ -27,82 +27,58 @@
 #include "Chat.h"
 #include "ObjectAccessor.h"
 
-bool Group::Create(const uint64 &guid, const char * name)
+void Group::Create(const uint64 &guid, const char * name)
 {
     m_leaderGuid = guid;
     m_leaderName = name;
 
     m_groupType  = GROUPTYPE_NORMAL;
     m_lootMethod = GROUP_LOOT;
-    m_lootThreshold = UNCOMMON;
 
-    if(!AddMember(guid, name))
-        return false;
+    AddMember(guid, name);
 
     // store group in database
     sDatabase.BeginTransaction();
     sDatabase.PExecute("DELETE FROM `group` WHERE `leaderGuid`='%u'", GUID_LOPART(m_leaderGuid));
     sDatabase.PExecute("DELETE FROM `group_member` WHERE `leaderGuid`='%u'", GUID_LOPART(m_leaderGuid));
-    sDatabase.PExecute("INSERT INTO `group`(`leaderGuid`,`mainTank`,`mainAssistant`,`lootMethod`,`looterGuid`,`lootThreshold`,`icon1`,`icon2`,`icon3`,`icon4`,`icon5`,`icon6`,`icon7`,`icon8`,`isRaid`) VALUES('%u','%u','%u','%u','%u','%u','%u','%u','%u','%u','%u','%u','%u','%u',0)", GUID_LOPART(m_leaderGuid), GUID_LOPART(m_mainTank), GUID_LOPART(m_mainAssistant), m_lootMethod, GUID_LOPART(m_looterGuid), m_lootThreshold, m_targetIcons[0], m_targetIcons[1], m_targetIcons[2], m_targetIcons[3], m_targetIcons[4], m_targetIcons[5], m_targetIcons[6], m_targetIcons[7]);
+    sDatabase.PExecute("INSERT INTO `group`(`leaderGuid`,`lootMethod`,`looterGuid`,`icon1`,`icon2`,`icon3`,`icon4`,`icon5`,`icon6`,`icon7`,`icon8`,`isRaid`) VALUES('%u','%u','%u','%u','%u','%u','%u','%u','%u','%u','%u',0)", GUID_LOPART(m_leaderGuid), m_lootMethod, GUID_LOPART(m_looterGuid), m_targetIcons[0], m_targetIcons[1], m_targetIcons[2], m_targetIcons[3], m_targetIcons[4], m_targetIcons[5], m_targetIcons[6], m_targetIcons[7]);
 
-    for(Group::member_citerator itr = m_members.begin(); itr != m_members.end(); ++itr)
-    {
-        sDatabase.PExecute("INSERT INTO `group_member`(`leaderGuid`,`memberGuid`,`assistant`,`subgroup`) VALUES('%u','%u','%u','%u')", 
-            GUID_LOPART(m_leaderGuid), GUID_LOPART(itr->guid), (itr->assistant==1)?1:0, itr->group);
-    }
+    for(vector<MemberSlot>::const_iterator citr=m_members.begin(); citr!=m_members.end(); citr++)
+        sDatabase.PExecute("INSERT INTO `group_member`(`leaderGuid`,`memberGuid`,`assistant`,`subgroup`) VALUES('%u','%u','%u','%u')", GUID_LOPART(m_leaderGuid), GUID_LOPART(citr->guid), (citr->assistant==1)?1:0, citr->group);
     sDatabase.CommitTransaction();
-
-    return true;
 }
 
-bool Group::LoadGroupFromDB(const uint64 &leaderGuid)
+void Group::LoadGroupFromDB(const uint64 &leaderGuid)
 {
-    //                                             0          1               2            3            4               5       6       7       8       9       10      11      12      13
-    QueryResult *result = sDatabase.PQuery("SELECT `mainTank`,`mainAssistant`,`lootMethod`,`looterGuid`,`lootThreshold`,`icon1`,`icon2`,`icon3`,`icon4`,`icon5`,`icon6`,`icon7`,`icon8`,`isRaid` FROM `group` WHERE `leaderGuid`='%u'", GUID_LOPART(leaderGuid));
+    //                                             0            1            2       3       4       5       6       7       8       9       10
+    QueryResult *result = sDatabase.PQuery("SELECT `lootMethod`,`looterGuid`,`icon1`,`icon2`,`icon3`,`icon4`,`icon5`,`icon6`,`icon7`,`icon8`,`isRaid` FROM `group` WHERE `leaderGuid`='%u'", GUID_LOPART(leaderGuid));
     if(!result)
-        return false;
+        return;
 
     m_leaderGuid = leaderGuid;
-
-    // group leader not exist
-    if(!objmgr.GetPlayerNameByGUID(m_leaderGuid, m_leaderName))
-        return false;
-
-    m_groupType  = (*result)[13].GetBool() ? GROUPTYPE_RAID : GROUPTYPE_NORMAL;
-    m_mainTank = (*result)[0].GetUInt64();
-    m_mainAssistant = (*result)[1].GetUInt64();
-    m_lootMethod = (LootMethod)(*result)[2].GetUInt8();
-    m_looterGuid = MAKE_GUID((*result)[3].GetUInt32(),HIGHGUID_PLAYER);
-    m_lootThreshold = (LootThreshold)(*result)[4].GetUInt16();
+    objmgr.GetPlayerNameByGUID(m_leaderGuid, m_leaderName);
+    m_groupType  = (*result)[10].GetBool() ? GROUPTYPE_RAID : GROUPTYPE_NORMAL;
+    m_lootMethod = (LootMethod)(*result)[0].GetUInt8();
+    m_looterGuid = MAKE_GUID((*result)[1].GetUInt32(),HIGHGUID_PLAYER);
 
     for(int i=0; i<TARGETICONCOUNT; i++)
-        m_targetIcons[i] = (*result)[5+i].GetUInt8();
+        m_targetIcons[i] = (*result)[2+i].GetUInt8();
     delete result;
 
     result = sDatabase.PQuery("SELECT `memberGuid`,`assistant`,`subgroup` FROM `group_member` WHERE `leaderGuid`='%u'", GUID_LOPART(leaderGuid));
     if(!result)
-        return false;
+        return;
 
     do
     {
         MemberSlot member;
         member.guid      = MAKE_GUID((*result)[0].GetUInt32(),HIGHGUID_PLAYER);
-
-        // skip non-existed member
-        if(!objmgr.GetPlayerNameByGUID(member.guid, member.name))
-            continue;
-
+        objmgr.GetPlayerNameByGUID(member.guid, member.name);
         member.group     = (*result)[2].GetUInt8();
         member.assistant = (*result)[1].GetBool();
         m_members.push_back(member);
     } while( result->NextRow() );
     delete result;
-
-    // group too small
-    if(m_members.size() < 2)
-        return false;
-
-    return true;
 }
 
 bool Group::AddInvite(Player *player)
@@ -112,7 +88,7 @@ bool Group::AddInvite(Player *player)
 
     RemoveInvite(player);
 
-    m_invitees.insert(player->GetGUID());
+    m_invitees.push_back(player->GetGUID());
 
     player->groupInfo.invite = this;
 
@@ -121,7 +97,7 @@ bool Group::AddInvite(Player *player)
 
 uint32 Group::RemoveInvite(Player *player)
 {
-    for(InvitesList::iterator itr=m_invitees.begin(); itr!=m_invitees.end(); ++itr)
+    for(vector<uint64>::iterator itr=m_invitees.begin(); itr!=m_invitees.end(); itr++)
     {
         if((*itr) == player->GetGUID())
         {
@@ -145,8 +121,7 @@ bool Group::AddMember(const uint64 &guid, const char* name)
 
 uint32 Group::RemoveMember(const uint64 &guid, const uint8 &method)
 {
-    // remove member and change leader (if need) only if strong more 2 members _before_ member remove
-    if(m_members.size() > 2)
+    if(m_members.size() > 1)
     {
         bool leaderChanged = _removeMember(guid);
 
@@ -162,20 +137,19 @@ uint32 Group::RemoveMember(const uint64 &guid, const uint8 &method)
             }
 
             data.Initialize(SMSG_GROUP_LIST, 14);
-            data<<(uint16)0<<(uint8)0<<(uint32)0<<(uint64)0;
+            data<<(uint16)0<<(uint32)0<<(uint64)0;
             player->GetSession()->SendPacket(&data);
         }
 
         if(leaderChanged)
         {
-            WorldPacket data(SMSG_GROUP_SET_LEADER, (m_members.front().name.size()+1));
-            data << m_members.front().name;
+            WorldPacket data(SMSG_GROUP_SET_LEADER, (m_members[0].name.size()+1));
+            data << m_members[0].name;
             BroadcastPacket(&data);
         }
 
         SendUpdate();
     }
-    // if group before remove <= 2 disband it
     else
         Disband(true);
 
@@ -184,15 +158,10 @@ uint32 Group::RemoveMember(const uint64 &guid, const uint8 &method)
 
 void Group::ChangeLeader(const uint64 &guid)
 {
-    member_citerator slot = _getMemberCSlot(guid);
-
-    if(slot==m_members.end())
-        return;
-
     _setLeader(guid);
 
-    WorldPacket data(SMSG_GROUP_SET_LEADER, slot->name.size()+1);
-    data << slot->name;
+    WorldPacket data(SMSG_GROUP_SET_LEADER, (m_members[_getMemberIndex(guid)].name.size()+1));
+    data << m_members[_getMemberIndex(guid)].name;
     BroadcastPacket(&data);
     SendUpdate();
 }
@@ -201,18 +170,15 @@ void Group::Disband(bool hideDestroy)
 {
     Player *player;
 
-    for(member_citerator citr = m_members.begin(); citr != m_members.end(); ++citr)
+    for(vector<MemberSlot>::const_iterator citr=m_members.begin(); citr!=m_members.end(); citr++)
     {
         player = objmgr.GetPlayer(citr->guid);
-        if(!player)
+        if(!player || !player->GetSession())
             continue;
 
         player->RemoveAreaAurasByOthers();
         player->RemoveAreaAurasFromGroup();
         player->groupInfo.group = NULL;
-
-        if(!player->GetSession())
-            continue;
 
         WorldPacket data;
         if(!hideDestroy)
@@ -222,15 +188,15 @@ void Group::Disband(bool hideDestroy)
         }
 
         data.Initialize(SMSG_GROUP_LIST, 14);
-        data<<(uint16)0<<(uint8)0<<(uint32)0<<(uint64)0;
+        data<<(uint16)0<<(uint32)0<<(uint64)0;
         player->GetSession()->SendPacket(&data);
     }
     RollId.clear();
     m_members.clear();
 
-    for(InvitesList::iterator itr=m_invitees.begin(); itr!=m_invitees.end(); ++itr)
+    for(vector<uint64>::iterator itr=m_invitees.begin(); itr!=m_invitees.end(); itr++)
     {
-        Player *invitee = objmgr.GetPlayer(*itr);
+        Player *invitee = objmgr.GetPlayer((*itr));
         if(invitee)
             invitee->groupInfo.invite = NULL;
     }
@@ -255,7 +221,7 @@ void Group::SendLootStartRoll(uint64 Guid, uint32 CountDown, const Roll &r)
     data << uint64(Guid);                                   // guid of the creature/go that has the item which is being rolled for
     data << uint32(r.totalPlayersRolling);                  // maybe the number of players rolling for it???
     data << uint32(r.itemid);                               // the itemEntryId for the item that shall be rolled for
-    data << uint32(r.itemRandomSuffix);                     // randomSuffix
+    data << uint32(0);                                      // unknown
     data << uint32(r.itemRandomPropId);                     // item random property ID
     data << uint32(CountDown);                              // the countdown time to choose "need" or "greed"
 
@@ -278,7 +244,7 @@ void Group::SendLootRoll(uint64 SourceGuid, uint64 TargetGuid, uint8 RollNumber,
     data << (uint32)0;                                      // unknown, maybe amount of players
     data << uint64(TargetGuid);
     data << uint32(r.itemid);                               // the itemEntryId for the item that shall be rolled for
-    data << uint32(r.itemRandomSuffix);                     // randomSuffix
+    data << uint32(0);                                      // unknown
     data << uint32(r.itemRandomPropId);                     // Item random property ID
     data << uint8(RollNumber);                              // 0: "Need for: [item name]" > 127: "you passed on: [item name]"      Roll number
     data << uint8(RollType);                                // 0: "Need for: [item name]" 0: "You have selected need for [item name] 1: need roll 2: greed roll
@@ -301,7 +267,7 @@ void Group::SendLootRollWon(uint64 SourceGuid, uint64 TargetGuid, uint8 RollNumb
     data << uint64(SourceGuid);                             // guid of the item rolled
     data << (uint32)0;                                      // unknown, maybe amount of players
     data << uint32(r.itemid);                               // the itemEntryId for the item that shall be rolled for
-    data << uint32(r.itemRandomSuffix);                     // randomSuffix
+    data << uint32(0);                                      // unknown
     data << uint32(r.itemRandomPropId);                     // Item random property
     data << uint64(TargetGuid);                             // guid of the player who won.
     data << uint8(RollNumber);                              // rollnumber realted to SMSG_LOOT_ROLL
@@ -326,7 +292,7 @@ void Group::SendLootAllPassed(uint64 Guid, uint32 NumberOfPlayers, const Roll &r
     data << uint32(NumberOfPlayers);                        // The number of players rolling for it???
     data << uint32(r.itemid);                               // The itemEntryId for the item that shall be rolled for
     data << uint32(r.itemRandomPropId);                     // Item random property ID
-    data << uint32(r.itemRandomSuffix);                     // Item random suffix ID 
+    data << uint32(0x3F3);                                  // unknown, I think it can be number of roll
 
     map<uint64, RollVote>::const_iterator itr;
     for (itr=r.playerVote.begin(); itr!=r.playerVote.end(); itr++)
@@ -342,6 +308,7 @@ void Group::SendLootAllPassed(uint64 Guid, uint32 NumberOfPlayers, const Roll &r
 
 void Group::GroupLoot(uint64 playerGUID, Loot *loot, Creature *creature)
 {
+
     vector<LootItem>::iterator i;
     ItemPrototype const *item;
     uint8 itemSlot = 0;
@@ -356,25 +323,24 @@ void Group::GroupLoot(uint64 playerGUID, Loot *loot, Creature *creature)
             //sLog.outDebug("Group::GroupLoot: missing item prototype for item with id: %d", i->itemid);
             continue;
         }
-        if (item->Quality >= m_lootThreshold)
+        if (item->Quality > ITEM_QUALITY_NORMAL)
         {
             Roll r;
             uint32 newitemGUID = objmgr.GenerateLowGuid(HIGHGUID_ITEM);
             r.itemGUID = newitemGUID;
             r.itemid = i->itemid;
             r.itemRandomPropId = i->randomPropertyId;
-            r.itemRandomSuffix = i->randomSuffix;
 
             //a vector is filled with only near party members
-            for(member_citerator itr = m_members.begin(); itr != m_members.end(); ++itr)
+            for (int j = 0; j < m_members.size(); j++)
             {
-                Player *member = objmgr.GetPlayer(itr->guid);
+                Player *member = objmgr.GetPlayer(m_members[j].guid);
                 if(!member || !member->GetSession())
                     continue;
 
                 if (member->GetDistance2dSq(creature) < sWorld.getConfig(CONFIG_GROUP_XP_DISTANCE))
                 {
-                    r.playerVote[itr->guid] = NOT_EMITED_YET;
+                    r.playerVote[m_members[j].guid] = NOT_EMITED_YET;
                     r.totalPlayersRolling++;
                 }
             }
@@ -404,18 +370,18 @@ void Group::NeedBeforeGreed(uint64 playerGUID, Loot *loot, Creature *creature)
     for (i=loot->items.begin(); i != loot->items.end(); i++)
     {
         item = objmgr.GetItemPrototype(i->itemid);
-        if (item->Quality >= m_lootThreshold)
+        if (item->Quality > ITEM_QUALITY_NORMAL)
         {
             Roll r;
             uint32 newitemGUID = objmgr.GenerateLowGuid(HIGHGUID_ITEM);
             r.itemGUID = newitemGUID;
             r.itemid = i->itemid;
             r.itemRandomPropId = i->randomPropertyId;
-            r.itemRandomSuffix = i->randomSuffix;
 
-            for(member_citerator itr = m_members.begin(); itr != m_members.end(); ++itr)
+            //a vector is filled with only near party members
+            for (int j = 0; j < m_members.size(); j++)
             {
-                Player *playerToRoll = objmgr.GetPlayer(itr->guid);
+                Player *playerToRoll = objmgr.GetPlayer(m_members[j].guid);
                 if(!playerToRoll || !playerToRoll->GetSession())
                     continue;
 
@@ -423,7 +389,7 @@ void Group::NeedBeforeGreed(uint64 playerGUID, Loot *loot, Creature *creature)
                 {
                     if (playerToRoll->GetDistance2dSq(creature) < sWorld.getConfig(CONFIG_GROUP_XP_DISTANCE))
                     {
-                        r.playerVote[itr->guid] = NOT_EMITED_YET;
+                        r.playerVote[m_members[j].guid] = NOT_EMITED_YET;
                         r.totalPlayersRolling++;
                     }
                 }
@@ -518,7 +484,7 @@ void Group::CountTheRoll(vector<Roll>::iterator roll, uint32 NumberOfPlayers)
             if (itr->second != NEED)
                 continue;
 
-            uint8 randomN = urand(1, 99);
+            uint8 randomN = urand(0, 99);
             SendLootRoll(0, itr->first, randomN, 1, *roll);
             if (maxresul < randomN)
             {
@@ -559,7 +525,7 @@ void Group::CountTheRoll(vector<Roll>::iterator roll, uint32 NumberOfPlayers)
             if (itr->second != GREED)
                 continue;
 
-            uint8 randomN = urand(1, 99);
+            uint8 randomN = urand(0, 99);
             SendLootRoll(0, itr->first, randomN, 2, *roll);
             if (maxresul < randomN)
             {
@@ -611,9 +577,28 @@ void Group::SetTargetIcon(uint8 id, uint64 guid)
     BroadcastPacket(&data);
 }
 
-Player* Group::GetMemberForXPAtKill(uint64 guid, Unit const* victim)
+bool Group::IsMember(uint64 guid) const
 {
-    Player* member = objmgr.GetPlayer(guid);
+    Player *player = objmgr.GetPlayer(guid);
+
+    if(player)
+        return (player->groupInfo.group == this);
+    else
+    {
+        QueryResult *result = sDatabase.PQuery("SELECT `leaderGuid` FROM `group_member` WHERE `memberGuid`='%u' AND `leaderGuid`='%u'", GUID_LOPART(guid), GUID_LOPART(GetLeaderGUID()));
+        if(result)
+        {
+            delete result;
+            return true;
+        }
+        else
+            return false;
+    }
+}
+
+Player* Group::GetMemberForXPAtKill(uint8 id, Unit const* victim)
+{
+    Player* member = objmgr.GetPlayer(GetMemberGUID(id));
     if(!member || !member->isAlive())
         return NULL;
     if(victim->GetDistanceSq(member) > sWorld.getConfig(CONFIG_GROUP_XP_DISTANCE))
@@ -627,9 +612,9 @@ Player* Group::GetMemberForXPAtKill(uint64 guid, Unit const* victim)
 uint32 Group::GetMemberCountForXPAtKill(Unit const* victim)
 {
     uint32 count = 0;
-    for(member_citerator itr = m_members.begin(); itr != m_members.end(); ++itr)
+    for (uint32 i = 0; i < GetMembersCount(); i++)
     {
-        Player* member = GetMemberForXPAtKill(itr->guid,victim);
+        Player* member = GetMemberForXPAtKill(i,victim);
 
         if(member)
             ++count;
@@ -637,7 +622,7 @@ uint32 Group::GetMemberCountForXPAtKill(Unit const* victim)
     return count;
 }
 
-/*void Group::SendInit(WorldSession *session)
+void Group::SendInit(WorldSession *session)
 {
     if(!session)
         return;
@@ -654,7 +639,6 @@ uint32 Group::GetMemberCountForXPAtKill(Unit const* victim)
                                                             // guess size
         WorldPacket data(SMSG_GROUP_LIST, (2+4+8+8+1+2+m_members.size()*20));
         data << (uint8)m_groupType;
-        data << (uint8)0;// 2.0.x, may be wrong position
         data << (uint8)myFlag;
 
         int count = 0;
@@ -678,11 +662,10 @@ uint32 Group::GetMemberCountForXPAtKill(Unit const* victim)
         data << (uint8)m_lootMethod;
         data << m_looterGuid;
         data << (uint16)2;
-        data << m_mainTank;//2.0.x
-        data << m_mainAssistant;//2.0.x
+
         session->SendPacket( &data );
     }
-}*/
+}
 
 void Group::SendTargetIconList(WorldSession *session)
 {
@@ -707,24 +690,24 @@ void Group::SendTargetIconList(WorldSession *session)
 void Group::SendUpdate()
 {
     Player *player;
+    WorldPacket data;
 
-    for(member_citerator citr = m_members.begin(); citr != m_members.end(); ++citr)
+    for(vector<MemberSlot>::const_iterator citr=m_members.begin(); citr!=m_members.end(); citr++)
     {
         player = objmgr.GetPlayer(citr->guid);
         if(!player || !player->GetSession())
             continue;
 
                                                             // guess size
-        WorldPacket data(SMSG_GROUP_LIST, (6+8+8+1+2+m_members.size()*20));
+        data.Initialize(SMSG_GROUP_LIST, (6+8+8+1+2+m_members.size()*20));
         data << (uint8)m_groupType;
-        data << (uint8)((m_bgGroup==true) ? 1 : 0);//2.0.x
                                                             // own flags (groupid | (assistant?0x80:0))
         data << (uint8)(citr->group | (citr->assistant?0x80:0));
 
         data << uint32(m_members.size()-1);
-        for(member_citerator citr2 = m_members.begin(); citr2 != m_members.end(); ++citr2)
+        for(vector<MemberSlot>::const_iterator citr2=m_members.begin(); citr2!=m_members.end(); citr2++)
         {
-            if(citr->guid == citr2->guid)
+            if(citr == citr2)
                 continue;
 
             data << citr2->name;
@@ -738,9 +721,7 @@ void Group::SendUpdate()
         data << m_leaderGuid;
         data << (uint8)m_lootMethod;
         data << m_looterGuid;
-        data << (uint16)m_lootThreshold; // loot threshold
-        data << m_mainTank;//2.0.x
-        data << m_mainAssistant;//2.0.x
+        data << (uint16)2;
 
         player->GetSession()->SendPacket( &data );
     }
@@ -748,13 +729,13 @@ void Group::SendUpdate()
 
 void Group::BroadcastPacket(WorldPacket *packet, int group, uint64 ignore)
 {
-    for(member_citerator itr = m_members.begin(); itr != m_members.end(); ++itr)
+    for (uint32 i = 0; i < m_members.size(); i++)
     {
-        if(ignore != 0 && itr->guid == ignore)
+        if(ignore != 0 && m_members[i].guid == ignore)
             continue;
 
-        Player *pl = objmgr.GetPlayer(itr->guid);
-        if (pl && pl->GetSession() && (group==-1 || itr->group==group))
+        Player *pl = objmgr.GetPlayer(m_members[i].guid);
+        if (pl && pl->GetSession() && (group==-1 || m_members[i].group==group))
             pl->GetSession()->SendPacket(packet);
     }
 }
@@ -764,10 +745,9 @@ bool Group::_addMember(const uint64 &guid, const char* name, bool isAssistant)
     // get first not-full group
     uint8 groupid = 0;
     vector<uint8> temp(MAXRAIDSIZE/MAXGROUPSIZE);
-    for(member_citerator itr = m_members.begin(); itr != m_members.end(); ++itr)
+    for(int i=0; i<m_members.size(); i++)
     {
-        if (itr->group >= temp.size()) continue;
-        temp[itr->group]++;
+        temp[m_members[i].group]++;
         if(temp[groupid] >= MAXGROUPSIZE)
             groupid++;
     }
@@ -778,9 +758,6 @@ bool Group::_addMember(const uint64 &guid, const char* name, bool isAssistant)
 bool Group::_addMember(const uint64 &guid, const char* name, bool isAssistant, uint8 group)
 {
     if(IsFull())
-        return false;
-
-    if(!guid)
         return false;
 
     MemberSlot member;
@@ -820,17 +797,14 @@ bool Group::_removeMember(const uint64 &guid)
     }
 
     _removeRolls(guid);
-
-    member_witerator slot = _getMemberWSlot(guid);
-    if (slot != m_members.end())
-        m_members.erase(slot);
+    m_members.erase(m_members.begin()+_getMemberIndex(guid));
 
     sDatabase.PExecute("DELETE FROM `group_member` WHERE `memberGuid`='%u'", GUID_LOPART(guid));
 
     if(m_leaderGuid == guid)                                // leader was removed
     {
         if(m_members.size() > 0)
-            _setLeader(m_members.front().guid);
+            _setLeader(m_members[0].guid);
         return true;
     }
 
@@ -839,17 +813,17 @@ bool Group::_removeMember(const uint64 &guid)
 
 void Group::_setLeader(const uint64 &guid)
 {
-    member_citerator slot = _getMemberCSlot(guid);
-    if(slot==m_members.end())
+    int8 id = _getMemberIndex(guid);
+    if(id < 0)
         return;
 
     // instance system leader change process
-    if (m_leaderGuid != slot->guid)
+    if (m_leaderGuid != m_members[id].guid)
     {
         // here we must unbind all instances bound to that leader on group members from the
         // leader, and rebind them on the players
         uint32 old_guid = m_leaderGuid;
-        uint32 new_guid = slot->guid;
+        uint32 new_guid = m_members[id].guid;
         std::set< uint32 > changed_bindings;
         Player* player;
         BoundInstancesMap::iterator i_BoundInstances;
@@ -861,8 +835,8 @@ void Group::_setLeader(const uint64 &guid)
         {
             std::ostringstream ss;
             ss << "SELECT DISTINCT(`map`) FROM `character_instance` WHERE (`guid` IN (";
-
-            for(member_citerator citr = m_members.begin(); citr != m_members.end(); )
+            vector<MemberSlot>::const_iterator citr = m_members.begin(); 
+            while (citr != m_members.end())
             {
                 ss << GUID_LOPART(citr->guid);
                 player = objmgr.GetPlayer(citr->guid);
@@ -878,7 +852,7 @@ void Group::_setLeader(const uint64 &guid)
                         }
                     }
                 }
-                ++citr;
+                citr++;
                 if (citr != m_members.end()) ss << ", ";
             }
             ss << ")) AND (`leader` = '" << GUID_LOPART(old_guid) << "')";
@@ -925,12 +899,12 @@ void Group::_setLeader(const uint64 &guid)
     }
     
     sDatabase.BeginTransaction();
-    sDatabase.PExecute("UPDATE `group` SET `leaderGuid`='%u' WHERE `leaderGuid`='%u'", GUID_LOPART(slot->guid), GUID_LOPART(m_leaderGuid));
-    sDatabase.PExecute("UPDATE `group_member` SET `leaderGuid`='%u' WHERE `leaderGuid`='%u'", GUID_LOPART(slot->guid), GUID_LOPART(m_leaderGuid));
+    sDatabase.PExecute("UPDATE `group` SET `leaderGuid`='%u' WHERE `leaderGuid`='%u'", GUID_LOPART(m_members[id].guid), GUID_LOPART(m_leaderGuid));
+    sDatabase.PExecute("UPDATE `group_member` SET `leaderGuid`='%u' WHERE `leaderGuid`='%u'", GUID_LOPART(m_members[id].guid), GUID_LOPART(m_leaderGuid));
     sDatabase.CommitTransaction();
 
-    m_leaderGuid = slot->guid;
-    m_leaderName = slot->name;
+    m_leaderGuid = m_members[id].guid;
+    m_leaderName = m_members[id].name;
 }
 
 void Group::_removeRolls(const uint64 &guid)
@@ -962,49 +936,32 @@ void Group::_convertToRaid()
 
 bool Group::_setMembersGroup(const uint64 &guid, const uint8 &group)
 {
-    member_witerator slot = _getMemberWSlot(guid);
-    if(slot==m_members.end())
+    int8 i = _getMemberIndex(guid);
+    if(i < 0)
         return false;
 
-    slot->group = group;
+    m_members[i].group = group;
     sDatabase.PExecute("UPDATE `group_member` SET `subgroup`='%u' WHERE `memberGuid`='%u'", group, GUID_LOPART(guid));
     return true;
 }
 
 bool Group::_setAssistantFlag(const uint64 &guid, const bool &state)
 {
-    member_witerator slot = _getMemberWSlot(guid);
-    if(slot==m_members.end())
+    int8 i = _getMemberIndex(guid);
+    if(i < 0)
         return false;
 
-
-    slot->assistant = state;
+    m_members[i].assistant = state;
     sDatabase.PExecute("UPDATE `group_member` SET `assistant`='%u' WHERE `memberGuid`='%u'", (state==true)?1:0, GUID_LOPART(guid));
     return true;
 }
 
-bool Group::_setMainTank(const uint64 &guid)
+int8 Group::_getMemberIndex(uint64 Guid) const
 {
-    member_citerator slot = _getMemberCSlot(guid);
-    if(slot==m_members.end())
-        return false;
-
-    if(m_mainAssistant == guid)
-        _setMainAssistant(0);
-    m_mainTank = guid;
-    sDatabase.PExecute("UPDATE `group` SET `mainTank`='%u' WHERE `leaderGuid`='%u'", GUID_LOPART(m_mainTank), GUID_LOPART(m_leaderGuid));
-    return true;
-}
-
-bool Group::_setMainAssistant(const uint64 &guid)
-{
-    member_witerator slot = _getMemberWSlot(guid);
-    if(slot==m_members.end())
-        return false;
-
-    if(m_mainTank == guid)
-        _setMainTank(0);
-    m_mainAssistant = guid;
-    sDatabase.PExecute("UPDATE `group` SET `mainAssistant`='%u' WHERE `leaderGuid`='%u'", GUID_LOPART(m_mainAssistant), GUID_LOPART(m_leaderGuid));
-    return true;
+    for (int i=0; i<m_members.size(); i++)
+    {
+        if (m_members[i].guid == Guid)
+            return i;
+    }
+    return -1;
 }

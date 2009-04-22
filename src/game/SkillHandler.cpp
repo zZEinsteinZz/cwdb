@@ -35,8 +35,7 @@ void WorldSession::HandleLearnTalentOpcode( WorldPacket & recv_data )
     uint32 talent_id, requested_rank;
     recv_data >> talent_id >> requested_rank;
 
-    uint32 CurTalentPoints =  GetPlayer()->GetFreeTalentPoints();
-;
+    uint32 CurTalentPoints =  GetPlayer()->GetUInt32Value(PLAYER_CHARACTER_POINTS1);
     if(CurTalentPoints == 0)
         return;
 
@@ -88,7 +87,7 @@ void WorldSession::HandleLearnTalentOpcode( WorldPacket & recv_data )
         for (unsigned int i = 0; i < numRows; i++)          // Loop through all talents.
         {
             // Someday, someone needs to revamp
-            const TalentEntry *tmpTalent = sTalentStore.LookupEntry(i);
+            TalentEntry *tmpTalent = sTalentStore.data[i];
             if (tmpTalent)                                  // the way talents are tracked
             {
                 if (tmpTalent->TalentTab == tTab)
@@ -133,7 +132,7 @@ void WorldSession::HandleLearnTalentOpcode( WorldPacket & recv_data )
                 GetPlayer( )->removeSpell((uint16)respellid);
                 GetPlayer()->RemoveAurasDueToSpell(respellid);
             }
-            GetPlayer()->SetFreeTalentPoints(CurTalentPoints - 1);
+            GetPlayer()->SetUInt32Value(PLAYER_CHARACTER_POINTS1, CurTalentPoints - 1);
         }
     }
 }
@@ -155,7 +154,8 @@ void WorldSession::HandleTalentWipeOpcode( WorldPacket & recv_data )
 
     if(!(_player->resetTalents()))
     {
-        WorldPacket data( MSG_TALENT_WIPE_CONFIRM, 0);         //you have not any talent
+        WorldPacket data;
+        data.Initialize( MSG_TALENT_WIPE_CONFIRM );         //you have not any talent
         SendPacket( &data );
         return;
     }

@@ -21,7 +21,6 @@
 
 #include "GameSystem/NGrid.h"
 
-#include "zthread/CountedPtr.h"
 #include <cmath>
 
 // Forward class definitions
@@ -58,11 +57,7 @@ class Player;
 typedef TYPELIST_3(Player, Creature/*pets*/, Corpse/*resurrectable*/)                   AllWorldObjectTypes;
 typedef TYPELIST_4(GameObject, Creature/*except pets*/, DynamicObject, Corpse/*Bones*/) AllGridObjectTypes;
 
-using ZThread::CountedPtr;
-
-typedef CountedPtr<Corpse> CorpsePtr;
-
-typedef std::map<OBJECT_HANDLE, CorpsePtr >        CorpseMapType;
+typedef std::map<OBJECT_HANDLE, Corpse* >        CorpseMapType;
 typedef std::map<OBJECT_HANDLE, Creature* >      CreatureMapType;
 typedef std::map<OBJECT_HANDLE, DynamicObject* > DynamicObjectMapType;
 typedef std::map<OBJECT_HANDLE, GameObject* >    GameObjectMapType;

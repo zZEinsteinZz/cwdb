@@ -159,6 +159,7 @@ void TemporarySummon::Summon(TempSummonType type, uint32 lifetime)
     m_timer = lifetime;
     m_lifetime = lifetime;
 
+    AddToWorld();
     MapManager::Instance().GetMap(GetMapId(), this)->Add((Creature*)this);
 
     AIM_Initialize();
@@ -171,8 +172,8 @@ void TemporarySummon::UnSummon()
     CleanupCrossRefsBeforeDelete();
     ObjectAccessor::Instance().AddObjectToRemoveList(this);
 
-    if(m_summoner && m_summoner->GetTypeId()==TYPEID_UNIT && ((Creature*)m_summoner)->AI())
-        ((Creature*)m_summoner)->AI()->SummonedCreatureDespawn(this);
+    if(m_summoner && m_summoner->GetTypeId()==TYPEID_UNIT)
+        ((Creature*)m_summoner)->AI().SummonedCreatureDespawn(this);
 }
 
 void TemporarySummon::SaveToDB()

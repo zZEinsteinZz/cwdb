@@ -35,7 +35,6 @@ class Player;
 class Weather;
 struct ScriptAction;
 struct ScriptInfo;
-class CliCommandHolder;
 
 /// Timers for different object refresh rates
 enum WorldTimers
@@ -44,8 +43,7 @@ enum WorldTimers
     WUPDATE_SESSIONS = 1,
     WUPDATE_AUCTIONS = 2,
     WUPDATE_WEATHERS = 3,
-    WUPDATE_UPTIME = 4,
-    WUPDATE_COUNT = 5
+    WUPDATE_COUNT = 4
 };
 
 /// Configuration elements
@@ -81,7 +79,6 @@ enum WorldConfigs
     CONFIG_GM_LOGIN_STATE,
     CONFIG_GM_LOG_TRADE,
     CONFIG_GROUP_VISIBILITY,
-    CONFIG_MAIL_DELIVERY_DELAY,
     CONFIG_SKILL_CHANCE_ORANGE,
     CONFIG_SKILL_CHANCE_YELLOW,
     CONFIG_SKILL_CHANCE_GREEN,
@@ -89,10 +86,6 @@ enum WorldConfigs
     CONFIG_MAX_OVERSPEED_PINGS,
     CONFIG_SAVE_RESPAWN_TIME_IMMEDIATLY,
     CONFIG_WEATHER,
-    CONFIG_EXPANSION,
-    CONFIG_CHATFLOOD_MESSAGE_COUNT,
-    CONFIG_CHATFLOOD_MESSAGE_DELAY,
-    CONFIG_CHATFLOOD_MUTE_TIME,
     CONFIG_VALUE_COUNT
 };
 
@@ -101,8 +94,7 @@ enum Rates
 {
     RATE_HEALTH=0,
     RATE_POWER_MANA,
-    RATE_POWER_RAGE_INCOME,
-    RATE_POWER_RAGE_LOSS,
+    RATE_POWER_RAGE,
     RATE_POWER_FOCUS,
     RATE_DROP_ITEMS,
     RATE_DROP_MONEY,
@@ -124,12 +116,6 @@ enum Rates
     RATE_REST_OFFLINE_IN_TAVERN_OR_CITY,
     RATE_REST_OFFLINE_IN_WILDERNESS,
     RATE_DAMAGE_FALL,
-    RATE_AUCTION_TIME,
-    RATE_AUCTION_DEPOSIT,
-    RATE_AUCTION_CUT,
-    RATE_MINING_AMOUNT,
-    RATE_MINING_NEXT,
-    RATE_TALENT,
     MAX_RATES
 };
 
@@ -152,38 +138,6 @@ enum RealmType
     REALM_NORMAL2 = 4,
     REALM_RP = 6,
     REALM_RPPVP = 8
-};
-
-/// CLI related stuff, define here to prevent cyclic dependancies
-
-typedef int(* pPrintf)(const char*,...);
-typedef void(* pCliFunc)(char *,pPrintf);
-
-/// Command Template class
-struct CliCommand
-{
-    char const * cmd;
-    pCliFunc Func;
-    char const * description;
-};
-
-/// Storage class for commands issued for delayed execution
-class CliCommandHolder
-{
-    private:
-        const CliCommand *cmd;
-        char *args;
-        pPrintf zprintf;
-    public:
-        CliCommandHolder(const CliCommand *command, const char *arguments, pPrintf zprintf) 
-            : cmd(command), zprintf(zprintf)
-        {
-            size_t len = strlen(arguments)+1;
-            args = new char[len];
-            memcpy(args, arguments, len);
-        }
-        ~CliCommandHolder() { delete[] args; }
-        void Execute() const { cmd->Func(args, zprintf); }
 };
 
 /// The World
@@ -224,8 +178,6 @@ class World
         /// Get the current Message of the Day
         const char* GetMotd() const { return m_motd.c_str(); }
 
-        uint32 GetDBClang() const { return m_langid; }
-
         /// Get the path where data (dbc, maps) are stored on disk
         std::string GetDataPath() const { return m_dataPath; }
 
@@ -237,18 +189,14 @@ class World
         uint32 GetUptime() const { return uint32(m_gameTime - m_startTime); }
 
         /// Get the maximum skill level a player can reach
-        uint16 GetConfigMaxSkillValue() const
-        {
-            uint32 lvl = getConfig(CONFIG_MAX_PLAYER_LEVEL);
-            return lvl > 60 ? 300 + ((lvl - 60) * 75) / 10 : lvl*5;
-        }
+        uint16 GetConfigMaxSkillValue() const { return getConfig(CONFIG_MAX_PLAYER_LEVEL)*5; }
 
         void SetInitialWorldSettings();
 
         void SendWorldText(const char *text, WorldSession *self = 0);
-        void SendGlobalMessage(WorldPacket *packet, WorldSession *self = 0, uint32 team = 0);
-        void SendZoneMessage(uint32 zone, WorldPacket *packet, WorldSession *self = 0, uint32 team = 0);
-        void SendZoneText(uint32 zone, const char *text, WorldSession *self = 0, uint32 team = 0);
+        void SendGlobalMessage(WorldPacket *packet, WorldSession *self = 0);
+        void SendZoneMessage(uint32 zone, WorldPacket *packet, WorldSession *self = 0, uint32 security = 0);
+        void SendZoneText(uint32 zone, const char *text, WorldSession *self = 0, uint32 security = 0);
         void SendServerMessage(uint32 type, const char *text = "", Player* player = NULL);
 
         /// Are we in the middle of a shutdown?
@@ -259,7 +207,6 @@ class World
 
         void Update(time_t diff);
 
-        void UpdateSessions( time_t diff );
         /// Set a server rate (see #Rates)
         void setRate(Rates rate,float value) { rate_values[rate]=value; }
         /// Get a server rate (see #Rates)
@@ -286,27 +233,18 @@ class World
 
         bool KickPlayer(std::string playerName);
         void KickAll();
-        bool BanAccount(std::string type, std::string nameOrIP, std::string duration, std::string reason, std::string author);
-        bool RemoveBanAccount(std::string type, std::string nameOrIP);
+        bool BanAccount(std::string nameOrIP);
+        bool RemoveBanAccount(std::string nameOrIP);
 
         void ScriptsStart(map<uint32, multimap<uint32, ScriptInfo> > const& scripts, uint32 id, Object* source, Object* target);
 
-        // for max speed access
-        static float GetMaxVisibleDistanceForCreature() { return m_MaxVisibleDistanceForCreature; }
-        static float GetMaxVisibleDistanceForPlayer()   { return m_MaxVisibleDistanceForPlayer;   }
-        static float GetMaxVisibleDistanceForObject()   { return m_MaxVisibleDistanceForObject;   }
-        static float GetMaxVisibleDistanceInFlight()    { return m_MaxVisibleDistanceInFlight;    }
-        static float GetVisibleUnitGreyDistance()       { return m_VisibleUnitGreyDistance;       }
-        static float GetVisibleObjectGreyDistance()     { return m_VisibleObjectGreyDistance;     }
-
-        void ProcessCliCommands();
-        void QueueCliCommand(CliCommandHolder* command) { cliCmdQueue.add(command); }
-
     protected:
+
         void _UpdateGameTime();
         void ScriptsProcess();
 
     private:
+
         time_t m_startTime;
         time_t m_gameTime;
         IntervalTimer m_timers[WUPDATE_COUNT];
@@ -325,25 +263,12 @@ class World
         float rate_values[MAX_RATES];
         uint32 m_configs[CONFIG_VALUE_COUNT];
         uint32 m_playerLimit;
-        uint32 m_langid;
-        void DetectDBCLang();
         bool m_allowMovement;
         std::string m_motd;
         std::string m_dataPath;
 
         uint32 m_ShutdownIdleMode;
         uint32 m_ShutdownTimer;
-
-        // for max speed access
-        static float m_MaxVisibleDistanceForCreature;
-        static float m_MaxVisibleDistanceForPlayer;
-        static float m_MaxVisibleDistanceForObject;
-        static float m_MaxVisibleDistanceInFlight;
-        static float m_VisibleUnitGreyDistance;
-        static float m_VisibleObjectGreyDistance;
-
-        // CLI command holder to be thread safe
-        ZThread::LockedQueue<CliCommandHolder*, ZThread::FastMutex> cliCmdQueue;
 };
 
 extern uint32 realmID;
